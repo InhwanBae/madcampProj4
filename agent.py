@@ -9,7 +9,10 @@ from model import DQN
 
 
 tf.app.flags.DEFINE_boolean("train", False, "학습모드. 게임을 화면에 보여주지 않습니다.")
+tf.app.flags.DEFINE_boolean("fancy", False, "예쁜 모드.")
+tf.app.flags.DEFINE_boolean("f", False, "예쁜 모드.")
 FLAGS = tf.app.flags.FLAGS
+
 
 # 최대 학습 횟수
 MAX_EPISODE = 100000
@@ -118,16 +121,16 @@ def train():
 
 def replay():
     print('뇌세포 깨우는 중..')
-    sess = tf.Session()
+    # sess = tf.Session()
 
     game = Game(SCREEN_WIDTH, SCREEN_HEIGHT, MODEL_WIDTH, MODEL_HEIGHT, show_game=True)
     #brain = DQN(sess, SCREEN_WIDTH, SCREEN_HEIGHT, NUM_ACTION)
     # 머리 주변을 보내주기
-    brain = DQN(sess, MODEL_WIDTH, MODEL_HEIGHT, NUM_ACTION)
+    # brain = DQN(sess, MODEL_WIDTH, MODEL_HEIGHT, NUM_ACTION)
 
-    saver = tf.train.Saver()
-    ckpt = tf.train.get_checkpoint_state('model')
-    saver.restore(sess, ckpt.model_checkpoint_path)
+    # saver = tf.train.Saver()
+    # ckpt = tf.train.get_checkpoint_state('model')
+    # saver.restore(sess, ckpt.model_checkpoint_path)
 
     # 게임을 시작합니다.
     for episode in range(MAX_EPISODE):
@@ -135,16 +138,17 @@ def replay():
         total_reward = 0
 
         state = game.reset()
-        brain.init_state(state)
+        # brain.init_state(state)
 
         while not terminal:
-            action = brain.get_action()
+            action = 1
+            # action = brain.get_action()
 
             # 결정한 액션을 이용해 게임을 진행하고, 보상과 게임의 종료 여부를 받아옵니다.
             state, reward, terminal = game.step(action)
             total_reward += reward
 
-            brain.remember(state, action, reward, terminal)
+            # brain.remember(state, action, reward, terminal)
 
             # 게임 진행을 인간이 인지할 수 있는 속도로^^; 보여줍니다.
             time.sleep(0.01)

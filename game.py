@@ -9,6 +9,76 @@ import matplotlib.patches as patches
 
 import multiprocessing
 
+def getColor():
+    return [random.randint(0,255),random.randint(0,255),random.randint(0,255)]
+
+
+class Pos:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+    def __add__(self, other):
+        return Pos(self.x + other.x, self.y + other.y)
+
+    # x == y
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
+    # x != y
+    def __ne__(self, other):
+        return self.x != other.x or self.y != other.y
+
+    # x < y
+    def __lt__(self, other):
+        return self.x < other.x and self.y < other.y
+    # x <=y
+    def __le__(self, other):
+        return self.x <= other.x and self.y <= other.y
+
+    # x > y
+    def __gt__(self, other):
+        return self.x > other.x and self.y > other.y
+
+    # x>= y
+    def __ge__(self, other):
+        return self.x >= other.x and self.y >= other.y
+
+
+class Snake:
+    def __init__(self, x, y):
+        self.pos = Pos(x, y)
+
+
+class Apple:
+    def __init__(self, x, y):
+        self.pos = Pos(x, y)
+        self.color = (getColor())
+
+        # x == y
+        def __eq__(self, other):
+            return self.pos == other.pos
+
+        # x != y
+        def __ne__(self, other):
+            return self.pos != other.pos
+
+        # x < y
+        def __lt__(self, other):
+            return self.pos < other.pos
+
+        # x <=y
+        def __le__(self, other):
+            return self.pos <= other.pos
+
+        # x > y
+        def __gt__(self, other):
+            return self.pos > other.pos
+
+        # x>= y
+        def __ge__(self, other):
+            return self.pos >= other.pos
+
+
 class Game:
     def __init__(self, screen_width, screen_height, model_width, model_height, show_game=True):
         self.block_size = 20
@@ -25,6 +95,11 @@ class Game:
         self.gameOver = False
 
         # 지렁이 정의
+        # self.snakes = []
+        # for i in range(8):
+        #     snake = Snake()
+        #     self.snakes.append(snake)
+
         self.snakeList = []
         self.snakeList2 = []
         self.snakeList3 = []
@@ -96,7 +171,7 @@ class Game:
             if xhead - self.block_size * 5 <= i[0] <= xhead + self.block_size * 5 and yhead - self.block_size * 5 <= i[1] <= yhead + self.block_size * 5:
                 snakeList.append(i)
         for j in _appleList:
-            if xhead - self.block_size * 5 <= j[0] <= xhead + self.block_size * 5 and yhead - self.block_size * 5 <= j[1] <= yhead + self.block_size * 5:
+            if xhead - self.block_size * 5 <= j.pos.x <= xhead + self.block_size * 5 and yhead - self.block_size * 5 <= j.pos.y <= yhead + self.block_size * 5:
                 appleList.append(j)
         for k in _enemyList:
             if xhead - self.block_size * 5 <= k[0] <= xhead + self.block_size * 5 and yhead - self.block_size * 5 <= k[1] <= yhead + self.block_size * 5:
@@ -112,51 +187,51 @@ class Game:
         for i in xapos:
             for j in yapos:
                 for apple in appleList:
-                    if [i, j] == apple:
-                        if xhead <= apple[0] and yhead <= apple[1]:
+                    if Pos(i,j) == apple.pos:
+                        if Pos(xhead, yhead) <= apple.pos:
                             right += 20
                             down += 20
-                        if xhead <= apple[0] and yhead >= apple[1]:
+                        if xhead <= apple.pos.x and yhead >= apple.pos.y:
                             right += 20
                             up += 20
-                        if xhead >= apple[0] and yhead <= apple[1]:
+                        if xhead >= apple.pos.x and yhead <= apple.pos.y:
                             left += 20
                             down += 20
-                        if xhead >= apple[0] and yhead >= apple[1]:
+                        if Pos(xhead, yhead) >= apple.pos:
                             left += 20
                             up += 20
 
         for i in xabpos:
             for j in yabpos:
                 for apple in appleList:
-                    if [i, j] == apple:
-                        if xhead <= apple[0] and yhead <= apple[1]:
+                    if Pos(i,j) == apple.pos:
+                        if Pos(xhead, yhead) <= apple.pos:
                             right += 200
                             down += 200
-                        if xhead <= apple[0] and yhead >= apple[1]:
+                        if xhead <= apple.pos.x and yhead >= apple.pos.y:
                             right += 200
                             up += 200
-                        if xhead >= apple[0] and yhead <= apple[1]:
+                        if xhead >= apple.pos.x and yhead <= apple.pos.y:
                             left += 200
                             down += 200
-                        if xhead >= apple[0] and yhead >= apple[1]:
+                        if Pos(xhead, yhead) >= apple.pos:
                             left += 200
                             up += 200
 
         for i in xpos:
             for j in ypos:
                 for apple in appleList:
-                    if [i, j] == apple:
-                        if xhead <= apple[0] and yhead <= apple[1]:
+                    if Pos(i,j) == apple.pos:
+                        if Pos(xhead, yhead) <= apple.pos:
                             right += 80
                             down += 80
-                        if xhead <= apple[0] and yhead >= apple[1]:
+                        if xhead <= apple.pos.x and yhead >= apple.pos.y:
                             right += 80
                             up += 80
-                        if xhead >= apple[0] and yhead <= apple[1]:
+                        if xhead >= apple.pos.x and yhead <= apple.pos.y:
                             left += 80
                             down += 80
-                        if xhead >= apple[0] and yhead >= apple[1]:
+                        if Pos(xhead, yhead) >= apple.pos:
                             left += 80
                             up += 80
 
@@ -199,13 +274,18 @@ class Game:
         if [xhead + self.block_size, yhead] in snakeList:
             right -= 10000
 
-        if [xhead, yhead - self.block_size] in appleList:
+        u = False
+        d = False
+        l = False
+        r = False
+
+        if Apple(xhead, yhead - self.block_size) in appleList:
             up += 2000
-        if [xhead, yhead + self.block_size] in appleList:
+        if Apple(xhead, yhead + self.block_size) in appleList:
             down += 2000
-        if [xhead - self.block_size, yhead] in appleList:
+        if Apple(xhead - self.block_size, yhead) in appleList:
             left += 2000
-        if [xhead + self.block_size, yhead] in appleList:
+        if Apple(xhead + self.block_size, yhead) in appleList:
             right += 2000
 
         if yhead - self.block_size < 0:
@@ -291,11 +371,12 @@ class Game:
                 state[round(points[0] / self.block_size)][round(points[1] / self.block_size)] = 0.75
 
         # 사과 0.75로 표현
-        for points in self.appleList:
+        for apple in self.appleList:
+            points = apple.pos
             # 맵 밖 사과 처리
-            if 0 <= round(points[0] / self.block_size) < self.screen_height and \
-                    0 <= round(points[1] / self.block_size) < self.screen_width:
-                state[round(points[0] / self.block_size)][round(points[1] / self.block_size)] = 0
+            if 0 <= round(points.x / self.block_size) < self.screen_height and \
+                    0 <= round(points.y / self.block_size) < self.screen_width:
+                state[round(points.x / self.block_size)][round(points.y / self.block_size)] = 0
 
         # 벽 0.5로 표현
 
@@ -404,8 +485,8 @@ class Game:
         self.gameDisplay.fill((0, 0, 0))
 
         for apple in self.appleList:
-            pygame.draw.rect(self.gameDisplay, (255, 0, 0), [apple[0], apple[1], self.block_size, self.block_size])
-
+            # pygame.draw.rect(self.gameDisplay, (255, 0, 0), [apple.pos.x, apple.pos.y, self.block_size, self.block_size])
+            pygame.draw.circle(self.gameDisplay, apple.color, (int(apple.pos.x), int(apple.pos.y)), self.block_size)
         self.snake(self.block_size, self.snakeList, 1)
         self.snake(self.block_size, self.snakeList3, 3)
         self.snake(self.block_size, self.snakeList4, 4)
@@ -511,7 +592,7 @@ class Game:
         while len(self.appleList) <= self.apple_count:
             randAppleX = round(random.randrange(0, self.display_width - self.block_size) / 20.0) * 20.0
             randAppleY = round(random.randrange(0, self.display_height - self.block_size) / 20.0) * 20.0
-            genApple = [randAppleX, randAppleY]
+            genApple = Apple(randAppleX, randAppleY)
 
             # 같은 위치에 사과가 생기지 않도록 함
             noApple = True
@@ -522,7 +603,7 @@ class Game:
             for snakeAll in [self.snakeList, self.snakeList2, self.snakeList3, self.snakeList4, self.snakeList5,
                              self.snakeList6, self.snakeList7,self.snakeList8]:
                 for snakeBody in snakeAll:
-                    if genApple == snakeBody:
+                    if genApple.pos.x == snakeBody[0] and genApple.pos.y == snakeBody[1]:
                         noApple = False
 
             if noApple == True:
@@ -571,30 +652,30 @@ class Game:
 
         # 사과를 먹었을 때 처리
         for apple in self.appleList:
-            if self.snakeList[len(self.snakeList) - 1] == apple:
+            if self.snakeList[len(self.snakeList) - 1][0] == [apple.pos.x, apple.pos.y]:
                 self.snakeLength += 1
                 removeAppleList.append(apple)
                 # 리워드 추가
                 reward += 1
-            if self.snakeList2[len(self.snakeList2) - 1] == apple:
+            if self.snakeList2[len(self.snakeList2) - 1] == [apple.pos.x, apple.pos.y]:
                 self.snakeLength2 += 1
                 removeAppleList.append(apple)
-            if self.snakeList3[len(self.snakeList3) - 1] == apple:
+            if self.snakeList3[len(self.snakeList3) - 1] == [apple.pos.x, apple.pos.y]:
                 self.snakeLength3 += 1
                 removeAppleList.append(apple)
-            if self.snakeList4[len(self.snakeList4) - 1] == apple:
+            if self.snakeList4[len(self.snakeList4) - 1] == [apple.pos.x, apple.pos.y]:
                 self.snakeLength4 += 1
                 removeAppleList.append(apple)
-            if self.snakeList5[len(self.snakeList5) - 1] == apple:
+            if self.snakeList5[len(self.snakeList5) - 1] == [apple.pos.x, apple.pos.y]:
                 self.snakeLength5 += 1
                 removeAppleList.append(apple)
-            if self.snakeList6[len(self.snakeList6) - 1] == apple:
+            if self.snakeList6[len(self.snakeList6) - 1] == [apple.pos.x, apple.pos.y]:
                 self.snakeLength6 += 1
                 removeAppleList.append(apple)
-            if self.snakeList7[len(self.snakeList7) - 1] == apple:
+            if self.snakeList7[len(self.snakeList7) - 1] == [apple.pos.x, apple.pos.y]:
                 self.snakeLength7 += 1
                 removeAppleList.append(apple)
-            if self.snakeList8[len(self.snakeList8) - 1] == apple:
+            if self.snakeList8[len(self.snakeList8) - 1] == [apple.pos.x, apple.pos.y]:
                 self.snakeLength8 += 1
                 removeAppleList.append(apple)
 
@@ -613,7 +694,7 @@ class Game:
                 < self.screen_width * self.screen_height * 0.9:
             randAppleX = round(random.randrange(0, self.display_width - self.block_size) / 20.0) * 20.0
             randAppleY = round(random.randrange(0, self.display_height - self.block_size) / 20.0) * 20.0
-            genApple = [randAppleX, randAppleY]
+            genApple = Apple(randAppleX, randAppleY)
 
             # 같은 위치에 사과가 생기지 않도록 함
             noApple = True
@@ -815,25 +896,32 @@ class Game:
         removeSnake2 = removeSnake3 = removeSnake4 = removeSnake5 = removeSnake6 = removeSnake7 = removeSnake8 = False
 
         if self.snakeList2[len(self.snakeList2) - 1] in self.snakeList2[:-1] or self.snakeList2[len(self.snakeList2) - 1] in self.snakeList + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-            appleAddList += self.snakeList2
+            for pos in self.snakeList2:
+                appleAddList.append(Apple(pos[0], pos[1]))
             removeSnake2 = True
         if self.snakeList3[len(self.snakeList3) - 1] in self.snakeList3[:-1] or self.snakeList3[len(self.snakeList3) - 1] in self.snakeList + self.snakeList2 + self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-            appleAddList += self.snakeList3
+            for pos in self.snakeList3:
+                appleAddList.append(Apple(pos[0], pos[1]))
             removeSnake3 = True
         if self.snakeList4[len(self.snakeList4) - 1] in self.snakeList4[:-1] or self.snakeList4[len(self.snakeList4) - 1] in self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-            appleAddList += self.snakeList4
+            for pos in self.snakeList4:
+                appleAddList.append(Apple(pos[0], pos[1]))
             removeSnake4 = True
         if self.snakeList5[len(self.snakeList5) - 1] in self.snakeList5[:-1] or self.snakeList5[len(self.snakeList5) - 1] in self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-            appleAddList += self.snakeList5
+            for pos in self.snakeList5:
+                appleAddList.append(Apple(pos[0], pos[1]))
             removeSnake5 = True
         if self.snakeList6[len(self.snakeList6) - 1] in self.snakeList6[:-1] or self.snakeList6[len(self.snakeList6) - 1] in self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList7 + self.snakeList8:
-            appleAddList += self.snakeList6
+            for pos in self.snakeList6:
+                appleAddList.append(Apple(pos[0], pos[1]))
             removeSnake6 = True
         if self.snakeList7[len(self.snakeList7) - 1] in self.snakeList7[:-1] or self.snakeList7[len(self.snakeList7) - 1] in self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList8:
-            appleAddList += self.snakeList7
+            for pos in self.snakeList7:
+                appleAddList.append(Apple(pos[0], pos[1]))
             removeSnake7 = True
         if self.snakeList8[len(self.snakeList8) - 1] in self.snakeList8[:-1] or self.snakeList8[len(self.snakeList8) - 1] in self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList7:
-            appleAddList += self.snakeList8
+            for pos in self.snakeList8:
+                appleAddList.append(Apple(pos[0], pos[1]))
             removeSnake8 = True
 
         if self.snakeList2[len(self.snakeList2) - 1][0] >= self.display_width or \
