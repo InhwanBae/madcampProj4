@@ -11,6 +11,7 @@ from model import DQN
 tf.app.flags.DEFINE_boolean("train", False, "학습모드. 게임을 화면에 보여주지 않습니다.")
 tf.app.flags.DEFINE_boolean("fancy", False, "예쁜 모드.")
 tf.app.flags.DEFINE_boolean("f", False, "예쁜 모드.")
+tf.app.flags.DEFINE_boolean("self_crash", False, "나한테 박으면 죽음.")
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -28,8 +29,8 @@ OBSERVE = 100
 
 # action: 0: 상, 1: 오, 2: 하, 3: 왼
 NUM_ACTION = 4
-SCREEN_WIDTH = 20
-SCREEN_HEIGHT = 20
+SCREEN_WIDTH = 40
+SCREEN_HEIGHT = 40
 
 MODEL_WIDTH = 7
 MODEL_HEIGHT = 7
@@ -121,16 +122,17 @@ def train():
 
 def replay():
     print('뇌세포 깨우는 중..')
-    # sess = tf.Session()
+    sess = tf.Session()
 
-    game = Game(SCREEN_WIDTH, SCREEN_HEIGHT, MODEL_WIDTH, MODEL_HEIGHT, show_game=True)
-    #brain = DQN(sess, SCREEN_WIDTH, SCREEN_HEIGHT, NUM_ACTION)
+    game = Game(SCREEN_WIDTH, SCREEN_HEIGHT, MODEL_WIDTH, MODEL_HEIGHT, show_game=True,
+                fancy_graphic=FLAGS.fancy or FLAGS.f, self_crash=FLAGS.self_crash)
+    # brain = DQN(sess, SCREEN_WIDTH, SCREEN_HEIGHT, NUM_ACTION)
     # 머리 주변을 보내주기
-    # brain = DQN(sess, MODEL_WIDTH, MODEL_HEIGHT, NUM_ACTION)
+    brain = DQN(sess, MODEL_WIDTH, MODEL_HEIGHT, NUM_ACTION)
 
-    # saver = tf.train.Saver()
-    # ckpt = tf.train.get_checkpoint_state('model')
-    # saver.restore(sess, ckpt.model_checkpoint_path)
+    saver = tf.train.Saver()
+    ckpt = tf.train.get_checkpoint_state('model')
+    saver.restore(sess, ckpt.model_checkpoint_path)
 
     # 게임을 시작합니다.
     for episode in range(MAX_EPISODE):
@@ -138,17 +140,16 @@ def replay():
         total_reward = 0
 
         state = game.reset()
-        # brain.init_state(state)
+        brain.init_state(state)
 
         while not terminal:
-            action = 1
-            # action = brain.get_action()
+            action = brain.get_action()
 
             # 결정한 액션을 이용해 게임을 진행하고, 보상과 게임의 종료 여부를 받아옵니다.
             state, reward, terminal = game.step(action)
             total_reward += reward
 
-            # brain.remember(state, action, reward, terminal)
+            brain.remember(state, action, reward, terminal)
 
             # 게임 진행을 인간이 인지할 수 있는 속도로^^; 보여줍니다.
             time.sleep(0.01)
@@ -157,6 +158,7 @@ def replay():
 
 
 def main(_):
+    print(FLAGS.self_crash)
     if FLAGS.train:
         train()
     else:

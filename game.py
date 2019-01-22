@@ -2,16 +2,40 @@
 import numpy as np
 import random
 import pygame
-import time
+import os
 
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
+BLOCK_SIZE = 20
+APPLE_COUNT = 120
 
-import multiprocessing
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
 
-def getColor():
+# 4방위 정의
+#    1
+# 3  0  4
+#    2
+dx = [0, 0, 0, -1, 1]
+dy = [0, -1, 1, 0, 0]
+
+def get_image(file_name):
+    return pygame.image.load('resource'+os.sep+file_name+'.png')
+
+def get_color():
     return [random.randint(0,255),random.randint(0,255),random.randint(0,255)]
 
+bg = get_image('background')
+eyes = []
+for i in range(8):
+    eyes.append(get_image('snakeEye'+str(i+1)))
+foods = []
+for i in range(16):
+    foods.append(get_image('food'+str(i+1).zfill(2)))
+
+small_foods = []
+for i in range(16):
+    small_foods.append(get_image('smallfood'+str(i+1).zfill(2)))
 
 class Pos:
     def __init__(self, x, y):
@@ -45,15 +69,57 @@ class Pos:
 
 
 class Snake:
-    def __init__(self, x=0, y=0):
+    def __init__(self, x=-1, y=-1, pos=Pos(-1, -1)):
+        if pos != Pos(-1,-1):
+            self.pos = Pos
         self.pos = Pos(x, y)
         self.length = 3
+        self.trunk = []
+        self.head = self.pos
+
+    def append_head(self, pos):
+        self.trunk.append(pos)
+        self.head = pos
+
+    def maybe_remove_tail(self):
+        if self.length < len(self):
+            del self.trunk[0]
+
+    def is_self_crash(self):
+        for t in self.trunk[:-1]:
+            if t == self.head:
+                return True
+        return False
+
+    def is_crash_wall(self, width, height):
+        if not (0 <= self.head.x < width and 0 <= self.head.y < height):
+            return True
+
+    def is_crash(self, pos):
+        for t in self.trunk:
+            if t == pos:
+                return True
+        return False
+
+    def __eq__(self, other):
+        return self.head == other.head
+
+    def __len__(self):
+        return len(self.trunk)
 
 
 class Apple:
-    def __init__(self, x, y):
-        self.pos = Pos(x, y)
-        self.color = (getColor())
+    def __init__(self, x=-1, y=-1, pos=Pos(-1,-1)):
+        if pos != Pos(-1,-1):
+            self.pos = pos
+        else:
+            self.pos = Pos(x, y)
+        self.color = (get_color())
+        self.is_big = random.randint(0,1)
+        if self.is_big:
+            self.shape = foods[random.randint(0, 15)]
+        else:
+            self.shape = small_foods[random.randint(0, 15)]
 
         # x == y
         def __eq__(self, other):
@@ -81,47 +147,22 @@ class Apple:
 
 
 class Game:
-    def __init__(self, screen_width, screen_height, model_width, model_height, show_game=True):
-        self.block_size = 20
-        self.apple_count = 30
-
+    def __init__(self, screen_width, screen_height, model_width, model_height, show_game=True,
+                 fancy_graphic=False, self_crash=False):
         self.screen_width = screen_width
         self.screen_height = screen_height
-        self.display_width = screen_width * self.block_size
-        self.display_height = screen_height * self.block_size
+        self.display_width = screen_width * BLOCK_SIZE
+        self.display_height = screen_height * BLOCK_SIZE
+        self.fancy_graphic = fancy_graphic
+        self.self_crash = self_crash
 
         self.model_width = model_width
         self.model_height = model_height
 
-        self.gameOver = False
-
-        # 지렁이 정의
-        # self.snakes = []
-        # for i in range(8):
-        #     snake = Snake()
-        #     self.snakes.append(snake)
-
-        self.snakeList = []
-        self.snakeList2 = []
-        self.snakeList3 = []
-        self.snakeList4 = []
-        self.snakeList5 = []
-        self.snakeList6 = []
-        self.snakeList7 = []
-        self.snakeList8 = []
-
-        # 지렁이 길이 정의
-        self.snakeLength = 3
-        self.snakeLength2 = 3
-        self.snakeLength3 = 3
-        self.snakeLength4 = 3
-        self.snakeLength5 = 3
-        self.snakeLength6 = 3
-        self.snakeLength7 = 3
-        self.snakeLength8 = 3
+        self.game_over = False
 
         # 사과 정의
-        self.appleList = []
+        self.apple_list = []
 
         # 사용자 지렁이 정의
         self.lead_x = 0
@@ -134,48 +175,52 @@ class Game:
         self.total_game = 0
         self.show_game = show_game
 
-        # 멀티프로세싱 전용 bot 저장공간
-        self.return_direction = [0, 0, 0, 0, 0, 0, 0]
-
         # 보여주기 위한 설정
         if show_game:
             self._prepare_display()
 
-    def snakeBot(self, _snakeList, _appleList, _enemyList):
+    def get_random_pos(self):
+        return Pos(round(random.randrange(0, self.display_width - BLOCK_SIZE) / BLOCK_SIZE) * BLOCK_SIZE,
+        round(random.randrange(0, self.display_height - BLOCK_SIZE) / BLOCK_SIZE) * BLOCK_SIZE)
+
+    # 봇들의 움직임 제어
+    def get_bot_action(self, snake, _apple_list, _enemyList):
         # 4방위 정의
         #    1
         # 3  0  4
         #    2
 
-        xhead = _snakeList[len(_snakeList) - 1][0]
-        yhead = _snakeList[len(_snakeList) - 1][1]
+        xhead = snake.head.x + 0
+        yhead = snake.head.y + 0
 
-        xpos = [xhead - self.block_size * 3, xhead - self.block_size * 2, xhead - self.block_size, xhead,
-                xhead + self.block_size, xhead + self.block_size * 2, xhead + self.block_size * 3]
-        ypos = [yhead - self.block_size * 3, yhead - self.block_size * 2, yhead - self.block_size, yhead,
-                yhead + self.block_size, yhead + self.block_size * 2, yhead + self.block_size * 3]
-        xapos = [xhead - self.block_size * 5, xhead - self.block_size * 4, xhead - self.block_size * 3, xhead - self.block_size * 2,
-                 xhead - self.block_size, xhead, xhead + self.block_size, xhead + self.block_size * 2, xhead + self.block_size * 3,
-                 xhead + self.block_size * 4, xhead + self.block_size * 5]
-        yapos = [yhead - self.block_size * 5, yhead - self.block_size * 4, yhead - self.block_size * 3, yhead - self.block_size * 2,
-                 yhead - self.block_size, yhead, yhead + self.block_size, yhead + self.block_size * 2, yhead + self.block_size * 3,
-                 yhead + self.block_size * 4, yhead + self.block_size * 5]
-        xabpos = [xhead - self.block_size, xhead, xhead + self.block_size]
-        yabpos = [yhead - self.block_size, yhead, yhead + self.block_size]
+        xpos = [xhead - BLOCK_SIZE * 3, xhead - BLOCK_SIZE * 2, xhead - BLOCK_SIZE, xhead,
+                xhead + BLOCK_SIZE, xhead + BLOCK_SIZE * 2, xhead + BLOCK_SIZE * 3]
+        ypos = [yhead - BLOCK_SIZE * 3, yhead - BLOCK_SIZE * 2, yhead - BLOCK_SIZE, yhead,
+                yhead + BLOCK_SIZE, yhead + BLOCK_SIZE * 2, yhead + BLOCK_SIZE * 3]
+        xapos = [xhead - BLOCK_SIZE * 5, xhead - BLOCK_SIZE * 4, xhead - BLOCK_SIZE * 3, xhead - BLOCK_SIZE * 2,
+                 xhead - BLOCK_SIZE, xhead, xhead + BLOCK_SIZE, xhead + BLOCK_SIZE * 2, xhead + BLOCK_SIZE * 3,
+                 xhead + BLOCK_SIZE * 4, xhead + BLOCK_SIZE * 5]
+        yapos = [yhead - BLOCK_SIZE * 5, yhead - BLOCK_SIZE * 4, yhead - BLOCK_SIZE * 3, yhead - BLOCK_SIZE * 2,
+                 yhead - BLOCK_SIZE, yhead, yhead + BLOCK_SIZE, yhead + BLOCK_SIZE * 2, yhead + BLOCK_SIZE * 3,
+                 yhead + BLOCK_SIZE * 4, yhead + BLOCK_SIZE * 5]
+        xabpos = [xhead - BLOCK_SIZE, xhead, xhead + BLOCK_SIZE]
+        yabpos = [yhead - BLOCK_SIZE, yhead, yhead + BLOCK_SIZE]
 
-        snakeList = []
-        appleList = []
+        snake_list = []
+        apple_list = []
         enemyList = []
 
-        for i in _snakeList:
-            if xhead - self.block_size * 5 <= i[0] <= xhead + self.block_size * 5 and yhead - self.block_size * 5 <= i[1] <= yhead + self.block_size * 5:
-                snakeList.append(i)
-        for j in _appleList:
-            if xhead - self.block_size * 5 <= j.pos.x <= xhead + self.block_size * 5 and yhead - self.block_size * 5 <= j.pos.y <= yhead + self.block_size * 5:
-                appleList.append(j)
-        for k in _enemyList:
-            if xhead - self.block_size * 5 <= k[0] <= xhead + self.block_size * 5 and yhead - self.block_size * 5 <= k[1] <= yhead + self.block_size * 5:
-                enemyList.append(k)
+        for i in snake.trunk:
+            if xhead - BLOCK_SIZE * 5 <= i.x <= xhead + BLOCK_SIZE * 5 and yhead - BLOCK_SIZE * 5 <= i.y <= yhead + BLOCK_SIZE * 5:
+                snake_list.append(i)
+        for j in _apple_list:
+            if xhead - BLOCK_SIZE * 5 <= j.pos.x <= xhead + BLOCK_SIZE * 5 and yhead - BLOCK_SIZE * 5 <= j.pos.y <= yhead + BLOCK_SIZE * 5:
+                apple_list.append(j)
+
+        for enemy in _enemyList:
+            for pos in enemy.trunk:
+                if xhead - BLOCK_SIZE * 5 <= pos.x <= xhead + BLOCK_SIZE * 5 and yhead - BLOCK_SIZE * 5 <= pos.y <= yhead + BLOCK_SIZE * 5:
+                    enemyList.append(pos)
 
         # 숫자 같지 않도록 0~1의 난수로 방향 랜덤 가중치
         up = random.random()
@@ -183,11 +228,10 @@ class Game:
         left = random.random()
         right = random.random()
 
-
         for i in xapos:
             for j in yapos:
-                for apple in appleList:
-                    if Pos(i,j) == apple.pos:
+                for apple in apple_list:
+                    if Pos(i, j) == apple.pos:
                         if Pos(xhead, yhead) <= apple.pos:
                             right += 20
                             down += 20
@@ -203,7 +247,7 @@ class Game:
 
         for i in xabpos:
             for j in yabpos:
-                for apple in appleList:
+                for apple in apple_list:
                     if Pos(i,j) == apple.pos:
                         if Pos(xhead, yhead) <= apple.pos:
                             right += 200
@@ -220,7 +264,7 @@ class Game:
 
         for i in xpos:
             for j in ypos:
-                for apple in appleList:
+                for apple in apple_list:
                     if Pos(i,j) == apple.pos:
                         if Pos(xhead, yhead) <= apple.pos:
                             right += 80
@@ -236,65 +280,60 @@ class Game:
                             up += 80
 
                 for enemy in enemyList:
-                    if [i, j] == enemy:
-                        if xhead < enemy[0] and yhead < enemy[1]:
-                            right -= 600 / abs(enemy[0] - xhead)
-                            down -= 600 / abs(enemy[1] - yhead)
-                        if xhead < enemy[0] and yhead > enemy[1]:
-                            right -= 600 / abs(enemy[0] - xhead)
-                            up -= 600 / abs(enemy[1] - yhead)
-                        if xhead > enemy[0] and yhead < enemy[1]:
-                            left -= 600 / abs(enemy[0] - xhead)
-                            down -= 600 / abs(enemy[1] - yhead)
-                        if xhead > enemy[0] and yhead > enemy[1]:
-                            left -= 600 / abs(enemy[0] - xhead)
-                            up -= 600 / abs(enemy[1] - yhead)
+                    if Pos(i, j) == enemy:
+                        if xhead < enemy.x and yhead < enemy.y:
+                            right -= 600 / abs(enemy.x - xhead)
+                            down -= 600 / abs(enemy.y - yhead)
+                        if xhead < enemy.x and yhead > enemy.y:
+                            right -= 600 / abs(enemy.x - xhead)
+                            up -= 600 / abs(enemy.y - yhead)
+                        if xhead > enemy.x and yhead < enemy.y:
+                            left -= 600 / abs(enemy.x - xhead)
+                            down -= 600 / abs(enemy.y - yhead)
+                        if xhead > enemy.x and yhead > enemy.y:
+                            left -= 600 / abs(enemy.x - xhead)
+                            up -= 600 / abs(enemy.y - yhead)
 
-                for body in snakeList:
-                    if [i, j] == body:
-                        if xhead <= body[0] and yhead <= body[1]:
-                            right -= 100 / (abs(body[0] - xhead) + 20)
-                            down -= 100 / (abs(body[1] - yhead) + 20)
-                        if xhead <= body[0] and yhead >= body[1]:
-                            right -= 100 / (abs(body[0] - xhead) + 20)
-                            up -= 100 / (abs(body[1] - yhead) + 20)
-                        if xhead >= body[0] and yhead <= body[1]:
-                            left -= 100 / (abs(body[0] - xhead) + 20)
-                            down -= 100 / (abs(body[1] - yhead) + 20)
-                        if xhead >= body[0] and yhead >= body[1]:
-                            left -= 100 / (abs(body[0] - xhead) + 20)
-                            up -= 100 / (abs(body[1] - yhead) + 20)
+                for body in snake_list:
+                    if Pos(i, j) == body:
+                        if xhead <= body.x and yhead <= body.y:
+                            right -= 100 / (abs(body.x - xhead) + 20)
+                            down -= 100 / (abs(body.y - yhead) + 20)
+                        if xhead <= body.x and yhead >= body.y:
+                            right -= 100 / (abs(body.x - xhead) + 20)
+                            up -= 100 / (abs(body.y - yhead) + 20)
+                        if xhead >= body.x and yhead <= body.y:
+                            left -= 100 / (abs(body.x - xhead) + 20)
+                            down -= 100 / (abs(body.y - yhead) + 20)
+                        if xhead >= body.x and yhead >= body.y:
+                            left -= 100 / (abs(body.x - xhead) + 20)
+                            up -= 100 / (abs(body.y - yhead) + 20)
 
-        if [xhead, yhead - self.block_size] in snakeList:
+        if Pos(xhead, yhead - BLOCK_SIZE) in snake_list:
             up -= 10000
-        if [xhead, yhead + self.block_size] in snakeList:
+        if Pos(xhead, yhead + BLOCK_SIZE) in snake_list:
             down -= 10000
-        if [xhead - self.block_size, yhead] in snakeList:
+        if Pos(xhead - BLOCK_SIZE, yhead) in snake_list:
             left -= 10000
-        if [xhead + self.block_size, yhead] in snakeList:
+        if Pos(xhead + BLOCK_SIZE, yhead) in snake_list:
             right -= 10000
 
-        u = False
-        d = False
-        l = False
-        r = False
-
-        if Apple(xhead, yhead - self.block_size) in appleList:
+        if Apple(xhead, yhead - BLOCK_SIZE) in apple_list:
             up += 2000
-        if Apple(xhead, yhead + self.block_size) in appleList:
+        if Apple(xhead, yhead + BLOCK_SIZE) in apple_list:
             down += 2000
-        if Apple(xhead - self.block_size, yhead) in appleList:
+        if Apple(xhead - BLOCK_SIZE, yhead) in apple_list:
             left += 2000
-        if Apple(xhead + self.block_size, yhead) in appleList:
+        if Apple(xhead + BLOCK_SIZE, yhead) in apple_list:
             right += 2000
 
-        if yhead - self.block_size < 0:
+        if yhead - BLOCK_SIZE < 0:
             up -= 1000
-        if yhead + self.block_size >= self.display_height:
+        if yhead + BLOCK_SIZE >= self.display_height:
             down -= 1000
-        if xhead - self.block_size < self.display_width:
+        if xhead - BLOCK_SIZE < self.display_width:
             left -= 1000
-        if xhead + self.block_size >= self.display_width:
+        if xhead + BLOCK_SIZE >= self.display_width:
             right -= 1000
 
         # print("up: " + str(up) + ", down: " + str(down) + ", left: " + str(left) + ", right: " + str(right))
@@ -310,54 +349,45 @@ class Game:
         direction = round(random.randrange(0, 5) / 4) * 4 + 1
         return direction
 
-    def snakeBotMulti(self, botData):
-        """멀티프로세싱 전용 함수"""
-        #print("Process start")
-        direction = self.snakeBot(botData[1], botData[2], botData[3])
-        #self.return_direction[botData[0]] = direction
-        #print("bot", botData[0] + 2, "direction:", direction)
-        return direction
-        #print("Process end")
-
     def _prepare_display(self):
         # TODO: 수정 예정
 
         pygame.init()
+        self.font = pygame.font.SysFont('Ubuntu', 20, True)
         self.fps = 15
         self.gameDisplay = pygame.display.set_mode((self.display_width, self.display_height))
         pygame.display.set_caption("SLITHER.IO")
 
-        self.img = pygame.image.load("snakeHead.png")
+        self.img = get_image("snakeHead")
         self.clock = pygame.time.Clock()
 
     def _get_state(self):
         # TODO: 값 세부 수정 예정 (사과 0, 바닥 0.25, 자기자신 0.5, 다른 지렁이 0.75, 벽 1)
-
         state = np.zeros((self.screen_width, self.screen_height))
         state.fill(0.25)
 
         # 자기 자신 1로 표현
-        for points in self.snakeList:
+        for points in self.snakes[0].trunk:
             # 맵 밖으로 나가서 죽은 뱀들 처리
-            if 0 <= round(points[0] / self.block_size) < self.screen_height and \
-                    0 <= round(points[1] / self.block_size) < self.screen_width:
-                state[round(points[0] / self.block_size)][round(points[1] / self.block_size)] = 0.5
+            if 0 <= round(points.x / BLOCK_SIZE) < self.screen_height and \
+                    0 <= round(points.y / BLOCK_SIZE) < self.screen_width:
+                state[round(points.x / BLOCK_SIZE)][round(points.y / BLOCK_SIZE)] = 0.5
 
         # 다른 지렁이 0.25 로 표현
-        for points in self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList6 + \
-                      self.snakeList7 + self.snakeList8:
-            # 맵 밖으로 나가서 죽은 뱀들 처리
-            if 0 <= round(points[0] / self.block_size) < self.screen_height and \
-                    0 <= round(points[1] / self.block_size) < self.screen_width:
-                state[round(points[0] / self.block_size)][round(points[1] / self.block_size)] = 0.75
+        for snake in self.snakes[1:]:
+            for points in snake.trunk:
+                # 맵 밖으로 나가서 죽은 뱀들 처리
+                if 0 <= round(points.x / BLOCK_SIZE) < self.screen_height and \
+                        0 <= round(points.y / BLOCK_SIZE) < self.screen_width:
+                    state[round(points.x / BLOCK_SIZE)][round(points.y / BLOCK_SIZE)] = 0.75
 
         # 사과 0.75로 표현
-        for apple in self.appleList:
+        for apple in self.apple_list:
             points = apple.pos
             # 맵 밖 사과 처리
-            if 0 <= round(points.x / self.block_size) < self.screen_height and \
-                    0 <= round(points.y / self.block_size) < self.screen_width:
-                state[round(points.x / self.block_size)][round(points.y / self.block_size)] = 0
+            if 0 <= round(points.x / BLOCK_SIZE) < self.screen_height and \
+                    0 <= round(points.y / BLOCK_SIZE) < self.screen_width:
+                state[round(points.x / BLOCK_SIZE)][round(points.y / BLOCK_SIZE)] = 0
 
         # 벽 0.5로 표현
 
@@ -366,8 +396,8 @@ class Game:
         current_state = np.zeros((self.model_width, self.model_height))
         current_state.fill(1)
 
-        xhead = round(self.snakeList[len(self.snakeList) - 1][0] / self.block_size)
-        yhead = round(self.snakeList[len(self.snakeList) - 1][1] / self.block_size)
+        xhead = round(self.snakes[0].head.x / BLOCK_SIZE)
+        yhead = round(self.snakes[0].head.y / BLOCK_SIZE)
 
         #print([xhead, yhead])
 
@@ -381,100 +411,148 @@ class Game:
                 if 0 <= i < self.screen_width and 0 <= j < self.screen_width:
                     current_state[i - (xhead - (xmiddle - 1))][j - (yhead - (ymiddle - 1))] = state[i][j]
 
-        """
-        print("")
-        for k in current_state:
-            print(k)
-        print("")
-        """
-
         return current_state
 
-    def snake(self, block_size, snakelist, slot):
-        if slot == 1:
-            color = (255, 255, 255)
-        elif slot == 2:
-            color = (0, 0, 255)
-        elif slot == 3:
-            color = (0, 0, 255)
-        elif slot == 4:
-            color = (0, 0, 255)
-        elif slot == 5:
-            color = (0, 0, 255)
-        elif slot == 6:
-            color = (0, 0, 255)
-        elif slot == 7:
-            color = (0, 0, 255)
-        elif slot == 8:
-            color = (0, 0, 255)
-        self.gameDisplay.blit(self.img, (snakelist[-1][0], snakelist[-1][1]))
-        for XnY in snakelist[:-1]:
-            pygame.draw.rect(self.gameDisplay, color, [XnY[0], XnY[1], block_size, block_size])
+    # 스네이크 표현해 주는 부분
+    def draw_snake(self, snake, slot):
+        if self.fancy_graphic:
+            # 예쁘게 그려주기
+            body = get_image('snakeBody'+str(slot))
+            shader = get_image("snakeShader40")
+
+            # 1/2 지점 생성
+            body_list = []
+            for i in range(len(snake)):
+                if i < len(snake) - 1:
+                    body_list.append(Pos((snake.trunk[i].x + snake.trunk[i + 1].x) / 2,
+                                         (snake.trunk[i].y + snake.trunk[i + 1].y) / 2))
+
+            snake_body = []
+            if len(snake) > 0:
+                snake_body.append(snake.trunk[0])
+            for i in range(len(body_list)):
+                snake_body.append(body_list[i])
+
+                if i < len(body_list) - 1:
+                    snake_body.append(Pos((body_list[i].x + body_list[i + 1].x) / 2,
+                                          (body_list[i].y + body_list[i + 1].y) / 2))
+            snake_body.append(snake.head)
+
+            body_list2 = []
+            for i in range(len(snake_body)):
+                if i < len(snake_body) - 1:
+                    body_list2.append(Pos((snake_body[i].x + snake_body[i+1].x) / 2,
+                                          (snake_body[i].y + snake_body[i+1].y) / 2))
+            snake_body2 = []
+            snake_body2.append(snake_body[0])
+            for i in range(len(body_list2)):
+                snake_body2.append(body_list2[i])
+
+                if i < len(body_list2) - 1:
+                    snake_body2.append(Pos((body_list2[i].x + body_list2[i+1].x) / 2,
+                                           (body_list2[i].y + body_list2[i+1].y) / 2))
+            snake_body2.append(snake_body[len(snake_body) - 1])
+
+            for i in range(len(snake_body2)):
+                if not i % 2 == 1:
+                    self.gameDisplay.blit(shader, (snake_body2[i].x - 10, snake_body2[i].y - 8))
+
+            for pos in snake_body2:
+                self.gameDisplay.blit(body, (pos.x - 2, pos.y - 2))
+
+            if len(snake) > 1:
+                if snake_body2[len(snake_body2) - 1].x == snake_body2[len(snake_body2) - 3].x and \
+                        snake_body2[len(snake_body2) - 1].y < snake_body2[len(snake_body2) - 3].y:
+                    self.gameDisplay.blit(eyes[0], (snake.head.x - 2, snake.head.y - 2))
+
+                if snake_body2[len(snake_body2) - 1].x > snake_body2[len(snake_body2) - 3].x and \
+                        snake_body2[len(snake_body2) - 1].y < snake_body2[len(snake_body2) - 3].y:
+                    self.gameDisplay.blit(eyes[1], (snake.head.x - 2, snake.head.y - 2))
+
+                if snake_body2[len(snake_body2) - 1].x > snake_body2[len(snake_body2) - 3].x and \
+                        snake_body2[len(snake_body2) - 1].y == snake_body2[len(snake_body2) - 3].y:
+                    self.gameDisplay.blit(eyes[2], (snake.head.x - 2, snake.head.y - 2))
+
+                if snake_body2[len(snake_body2) - 1].x > snake_body2[len(snake_body2) - 3].x and \
+                        snake_body2[len(snake_body2) - 1].y > snake_body2[len(snake_body2) - 3].y:
+                    self.gameDisplay.blit(eyes[3], (snake.head.x - 2, snake.head.y - 2))
+
+                if snake_body2[len(snake_body2) - 1].x == snake_body2[len(snake_body2) - 3].x and \
+                        snake_body2[len(snake_body2) - 1].y > snake_body2[len(snake_body2) - 3].y:
+                    self.gameDisplay.blit(eyes[4], (snake.head.x - 2, snake.head.y - 2))
+
+                if snake_body2[len(snake_body2) - 1].x < snake_body2[len(snake_body2) - 3].x and \
+                        snake_body2[len(snake_body2) - 1].y > snake_body2[len(snake_body2) - 3].y:
+                    self.gameDisplay.blit(eyes[5], (snake.head.x - 2, snake.head.y - 2))
+
+                if snake_body2[len(snake_body2) - 1].x < snake_body2[len(snake_body2) - 3].x and \
+                        snake_body2[len(snake_body2) - 1].y == snake_body2[len(snake_body2) - 3].y:
+                    self.gameDisplay.blit(eyes[6], (snake.head.x - 2, snake.head.y - 2))
+
+                if snake_body2[len(snake_body2) - 1].x < snake_body2[len(snake_body2) - 3].x and \
+                        snake_body2[len(snake_body2) - 1].y < snake_body2[len(snake_body2) - 3].y:
+                    self.gameDisplay.blit(eyes[7], (snake.head.x - 2, snake.head.y - 2))
+            else:
+                self.gameDisplay.blit(eyes[0], (snake.head.x - 2, snake.head.y - 2))
+
+        else:
+            color = WHITE
+            if slot != 1:
+                color = BLUE
+            for pos in snake.trunk:
+                pygame.draw.rect(self.gameDisplay, color, [pos.x, pos.y, BLOCK_SIZE, BLOCK_SIZE])
+            self.gameDisplay.blit(self.img, (snake.head.x, snake.head.y))
+
+    def _draw_text(self, message, pos, color=WHITE):
+        self.gameDisplay.blit(self.font.render(message, True, color), pos)
+
+    def _draw_score(self):
+        self._draw_text("SCOREBOARD", (self.screen_width / 2,self.screen_height / 2))
+        score_list = []
+        score_list.append([len(self.snakes[0]), 'ME'])
+
+        for i in range(1,8):
+            score_list.append([len(self.snakes[i]), 'bot'+str(i+1)])
+
+        def getKey(item):
+            return item[0]
+
+
+
+        print(score_list)
+        i = 1
+        for score, name in reversed(sorted(score_list, key=getKey)):
+            self._draw_text(str(i) + ". " + str(name) + ": " + str(score),
+                            (self.screen_width / 2,self.screen_height / 2 + i * BLOCK_SIZE))
+            i+=1
 
     def _draw_screen(self):
-        # TODO: 수정 예정
-        """
-        title = " Avg. Reward: %d Reward: %d Snake Length: %d Total Game: %d" % (
-                        self.total_reward / self.total_game,
-                        self.current_reward, self.snakeLength,
-                        self.total_game)
 
-        # self.axis.clear()
-        self.axis.set_title(title, fontsize=12)
-
-        # 게임판 검은색 표현
-        road = patches.Rectangle((0, 0), self.screen_width, self.screen_height, linewidth=0, facecolor="#000000")
-        self.axis.add_patch(road)
-
-        # 사과 빨간색 표현
-        for points in self.appleList:
-            # 맵 밖 사과 처리
-            posx = round(points[0] / self.block_size)
-            posy = round(points[1] / self.block_size)
-            if 0 <= posx < self.screen_height and 0 <= posy < self.screen_width:
-                block = patches.Rectangle((posx, self.screen_height - posy - 1), 1, 1, linewidth=0, facecolor="#FF0000")
-                self.axis.add_patch(block)
-
-        # 자기 자신 흰색 표현
-        for points in self.snakeList:
-            # 맵 밖으로 나가서 죽은 뱀들 처리
-            posx = round(points[0] / self.block_size)
-            posy = round(points[1] / self.block_size)
-            if 0 <= posx < self.screen_height and 0 <= posy < self.screen_width:
-                block = patches.Rectangle((posx, self.screen_height - posy - 1), 1, 1, linewidth=0, facecolor="#FFFFFF")
-                self.axis.add_patch(block)
-
-        # 다른 지렁이 파란색 표현
-        for points in self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList6 + \
-                      self.snakeList7 + self.snakeList8:
-            # 맵 밖으로 나가서 죽은 뱀들 처리
-            posx = round(points[0] / self.block_size)
-            posy = round(points[1] / self.block_size)
-            if 0 <= posx < self.screen_height and 0 <= posy < self.screen_width:
-                block = patches.Rectangle((posx, self.screen_height - posy - 1), 1, 1, linewidth=0, facecolor="#0000FF")
-                self.axis.add_patch(block)
-
-        self.fig.canvas.draw()
-        # 게임의 다음 단계 진행을 위해 matplot 의 이벤트 루프를 잠시 멈춥니다.
-        plt.pause(0.0001)
-        """
         # 게임 화면에 구현
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
 
-        self.gameDisplay.fill((0, 0, 0))
+        self.gameDisplay.fill(BLACK)
+        if self.fancy_graphic:
+            self.gameDisplay.blit(bg, (0, 0))
 
-        for apple in self.appleList:
-            # pygame.draw.rect(self.gameDisplay, (255, 0, 0), [apple.pos.x, apple.pos.y, self.block_size, self.block_size])
-            pygame.draw.circle(self.gameDisplay, apple.color, (int(apple.pos.x), int(apple.pos.y)), self.block_size)
-        self.snake(self.block_size, self.snakeList, 1)
-        self.snake(self.block_size, self.snakeList3, 3)
-        self.snake(self.block_size, self.snakeList4, 4)
-        self.snake(self.block_size, self.snakeList5, 5)
-        self.snake(self.block_size, self.snakeList6, 6)
-        self.snake(self.block_size, self.snakeList7, 7)
-        self.snake(self.block_size, self.snakeList8, 8)
+        for apple in self.apple_list:
+            if self.fancy_graphic:
+                adjust = 2
+                if apple.is_big:
+                    adjust = 7
+
+                self.gameDisplay.blit(apple.shape, (int(apple.pos.x -adjust), int(apple.pos.y - adjust)))
+                # pygame.draw.circle(self.gameDisplay, apple.color, (int(apple.pos.x), int(apple.pos.y)), 7)
+            else:
+                pygame.draw.rect(self.gameDisplay, (255, 0, 0), [apple.pos.x, apple.pos.y, BLOCK_SIZE, BLOCK_SIZE])
+
+
+        for i in range(8):
+            self.draw_snake(self.snakes[i], i + 1)
+
+        self._draw_score()
 
         # 화면 업데이트
         pygame.display.update()
@@ -485,117 +563,59 @@ class Game:
 
     def reset(self):
         # 게임 판 초기화
-        self.gameOver = False
-
-        self.return_direction = [0, 0, 0, 0, 0, 0, 0]
+        self.game_over = False
 
         # 지렁이 정의
-        self.snakeList = []
-        self.snakeList2 = []
-        self.snakeList3 = []
-        self.snakeList4 = []
-        self.snakeList5 = []
-        self.snakeList6 = []
-        self.snakeList7 = []
-        self.snakeList8 = []
+        self.snakes = []
+        for i in range(8):
+            self.snakes.append(Snake())
 
-        # 지렁이 길이 정의
-        self.snakeLength = 3
-        self.snakeLength2 = 3
-        self.snakeLength3 = 3
-        self.snakeLength4 = 3
-        self.snakeLength5 = 3
-        self.snakeLength6 = 3
-        self.snakeLength7 = 3
-        self.snakeLength8 = 3
-
-        self.lead_x = round(random.randrange(0, self.display_width - self.block_size) / 20.0) * 20.0
-        self.lead_y = round(random.randrange(0, self.display_width - self.block_size) / 20.0) * 20.0
         self.lead_x_change = 0
         self.lead_y_change = 0
 
-        self.appleList = []
-
+        self.apple_list = []
         # 지렁이들의 위치 생성
-        while True:
-            randPosition = [round(random.randrange(0, self.display_width - self.block_size) / 20.0) * 20.0,
-                            round(random.randrange(0, self.display_width - self.block_size) / 20.0) * 20.0]
+        snake_idx = 0
+        for snake in self.snakes:
+            while len(snake) == 0:
+                rand_pos = self.get_random_pos()
+                is_snake_exist = False
+                for other in self.snakes:
+                    for pos in other.trunk:
+                        if rand_pos == pos:
+                            is_snake_exist = True
+                if not is_snake_exist:
+                    snake.append_head(rand_pos)
+                if snake_idx == 0:
+                    self.lead_x = rand_pos.x
+                    self.lead_y = rand_pos.y
+                snake_idx += 1
 
-            # 값 지정
-            if len(self.snakeList) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList.append([self.lead_x, self.lead_y])
-                continue
-            if len(self.snakeList2) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList2.append(randPosition)
-                continue
-            if len(self.snakeList3) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList3.append(randPosition)
-                continue
-            if len(self.snakeList4) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList4.append(randPosition)
-                continue
-            if len(self.snakeList5) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList5.append(randPosition)
-                continue
-            if len(self.snakeList6) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList6.append(randPosition)
-                continue
-            if len(self.snakeList7) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList7.append(randPosition)
-                continue
-            if len(self.snakeList8) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList8.append(randPosition)
-                continue
-
-            # 종료조건
-            if len(self.snakeList) > 0 and len(self.snakeList2) > 0 and len(self.snakeList3) > 0 and \
-                    len(self.snakeList4) > 0 and len(self.snakeList5) > 0 and len(self.snakeList6) > 0 and \
-                    len(self.snakeList7) > 0 and len(self.snakeList8) > 0:
-                break
 
         # 사과 생성
-        while len(self.appleList) <= self.apple_count:
-            randAppleX = round(random.randrange(0, self.display_width - self.block_size) / 20.0) * 20.0
-            randAppleY = round(random.randrange(0, self.display_height - self.block_size) / 20.0) * 20.0
-            genApple = Apple(randAppleX, randAppleY)
+        while len(self.apple_list) <= APPLE_COUNT:
+            gen_apple = Apple(pos=self.get_random_pos())
 
             # 같은 위치에 사과가 생기지 않도록 함
-            noApple = True
-            for apple in self.appleList:
-                if genApple == apple:
-                    noApple = False
+            is_apple_exist = False
+            for apple in self.apple_list:
+                if gen_apple == apple:
+                    is_apple_exist = True
             # 뱀 위에 사과가 생기지 않도록 함
-            for snakeAll in [self.snakeList, self.snakeList2, self.snakeList3, self.snakeList4, self.snakeList5,
-                             self.snakeList6, self.snakeList7,self.snakeList8]:
-                for snakeBody in snakeAll:
-                    if genApple.pos.x == snakeBody[0] and genApple.pos.y == snakeBody[1]:
-                        noApple = False
+            for snake in self.snakes:
+                for pos in snake.trunk:
+                    if gen_apple.pos == pos:
+                        is_apple_exist = True
 
-            if noApple == True:
-                self.appleList.append(genApple)
+            if not is_apple_exist:
+                self.apple_list.append(gen_apple)
 
         self.current_reward = 0
         self.total_game += 1
-        self._update_block()
+        self._update_board()
         return self._get_state()
 
-    def _update_car(self, move):
+    def _update_snake(self, move):
         # 4방위 정의
         #    1
         # 4  0  2
@@ -604,16 +624,16 @@ class Game:
 
         # 사용자 입력 처리문
         if move == 4:
-            self.lead_x_change = -self.block_size
+            self.lead_x_change = -BLOCK_SIZE
             self.lead_y_change = 0
         elif move == 2:
-            self.lead_x_change = self.block_size
+            self.lead_x_change = BLOCK_SIZE
             self.lead_y_change = 0
         elif move == 1:
-            self.lead_y_change = -self.block_size
+            self.lead_y_change = -BLOCK_SIZE
             self.lead_x_change = 0
         elif move == 3:
-            self.lead_y_change = self.block_size
+            self.lead_y_change = BLOCK_SIZE
             self.lead_x_change = 0
 
         # 머리의 위치 추가
@@ -621,439 +641,138 @@ class Game:
         self.lead_y += self.lead_y_change
 
         # 머리 이동,리스트 추가 및 맨 마지막 꼬리 제거
-        self.snakeList.append([self.lead_x, self.lead_y])
-        if len(self.snakeList) > self.snakeLength:
-            del self.snakeList[0]
+        # print(self.lead_x, self.lead_y)
+        self.snakes[0].append_head(Pos(self.lead_x, self.lead_y))
+        self.snakes[0].maybe_remove_tail()
 
-    def _update_block(self):
+    # 봇과 사과를 업데이트 한다.
+    def _update_board(self):
         # TODO: 수정 예정
         reward = 0
+        remove_apple = []
+        # 먹은 사과 제거
+        for apple in self.apple_list:
+            i = 0
+            for snake in self.snakes:
+                if snake.head == apple.pos:
+                    snake.length += 1
+                    if i == 0:
+                        reward += 1
+                    if apple not in remove_apple:
+                        remove_apple.append(apple)
+                i += 1
 
-        removeAppleList = []
+        for apple in remove_apple:
+            self.apple_list.remove(apple)
 
-        # 사과를 먹었을 때 처리
-        for apple in self.appleList:
-            if self.snakeList[len(self.snakeList) - 1][0] == [apple.pos.x, apple.pos.y]:
-                self.snakeLength += 1
-                removeAppleList.append(apple)
-                # 리워드 추가
-                reward += 1
-            if self.snakeList2[len(self.snakeList2) - 1] == [apple.pos.x, apple.pos.y]:
-                self.snakeLength2 += 1
-                removeAppleList.append(apple)
-            if self.snakeList3[len(self.snakeList3) - 1] == [apple.pos.x, apple.pos.y]:
-                self.snakeLength3 += 1
-                removeAppleList.append(apple)
-            if self.snakeList4[len(self.snakeList4) - 1] == [apple.pos.x, apple.pos.y]:
-                self.snakeLength4 += 1
-                removeAppleList.append(apple)
-            if self.snakeList5[len(self.snakeList5) - 1] == [apple.pos.x, apple.pos.y]:
-                self.snakeLength5 += 1
-                removeAppleList.append(apple)
-            if self.snakeList6[len(self.snakeList6) - 1] == [apple.pos.x, apple.pos.y]:
-                self.snakeLength6 += 1
-                removeAppleList.append(apple)
-            if self.snakeList7[len(self.snakeList7) - 1] == [apple.pos.x, apple.pos.y]:
-                self.snakeLength7 += 1
-                removeAppleList.append(apple)
-            if self.snakeList8[len(self.snakeList8) - 1] == [apple.pos.x, apple.pos.y]:
-                self.snakeLength8 += 1
-                removeAppleList.append(apple)
-
-        # 사과 제거
-        for rapple in removeAppleList:
-            try:
-                self.appleList.remove(rapple)
-                break
-            except(RuntimeError):
-                pass
+        total_snake_length = 0
+        for snake in self.snakes:
+            total_snake_length += len(snake)
 
         # 사과 생성
-        while len(self.appleList) <= self.apple_count and len(self.appleList) + len(self.snakeList) + \
-                len(self.snakeList2) + len(self.snakeList3) + len(self.snakeList4) + len(self.snakeList5) + \
-                len(self.snakeList6) + len(self.snakeList7) + len(self.snakeList8) \
+        while len(self.apple_list) <= APPLE_COUNT and len(self.apple_list) + total_snake_length \
                 < self.screen_width * self.screen_height * 0.9:
-            randAppleX = round(random.randrange(0, self.display_width - self.block_size) / 20.0) * 20.0
-            randAppleY = round(random.randrange(0, self.display_height - self.block_size) / 20.0) * 20.0
-            genApple = Apple(randAppleX, randAppleY)
+            gen_apple = Apple(pos=self.get_random_pos())
 
             # 같은 위치에 사과가 생기지 않도록 함
-            noApple = True
-            for apple in self.appleList:
-                if genApple == apple:
-                    noApple = False
+            is_apple_exist = False
+            for apple in self.apple_list:
+                if gen_apple == apple:
+                    is_apple_exist = True
+
             # 뱀 위에 사과가 생기지 않도록 함
-            for snakeAll in [self.snakeList, self.snakeList2, self.snakeList3, self.snakeList4, self.snakeList5,
-                             self.snakeList6, self.snakeList7, self.snakeList8]:
-                for snakeBody in snakeAll:
-                    if genApple == snakeBody:
-                        noApple = False
+            for snake in self.snakes:
+                for pos in snake.trunk:
+                    if gen_apple.pos == pos:
+                        is_apple_exist = True
 
-            if noApple == True:
-                self.appleList.append(genApple)
+            if not is_apple_exist:
+                self.apple_list.append(gen_apple)
 
-        # Snake Bot 이동
-        """
-        # 멀티프로세싱
-        bot2data = [0, self.snakeList2, self.appleList, self.snakeList + self.snakeList3 + self.snakeList4 +
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8]
-        bot3data = [1, self.snakeList3, self.appleList, self.snakeList + self.snakeList2 + self.snakeList4 +
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8]
-        bot4data = [2, self.snakeList4, self.appleList, self.snakeList + self.snakeList2 + self.snakeList3 +
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8]
-        bot5data = [3, self.snakeList5, self.appleList, self.snakeList + self.snakeList2 + self.snakeList3 +
-                    self.snakeList4 + self.snakeList6 + self.snakeList7 + self.snakeList8]
-        bot6data = [4, self.snakeList6, self.appleList, self.snakeList + self.snakeList2 + self.snakeList3 +
-                    self.snakeList4 + self.snakeList5 + self.snakeList7 + self.snakeList8]
-        bot7data = [5, self.snakeList7, self.appleList, self.snakeList + self.snakeList2 + self.snakeList3 +
-                    self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList8]
-        bot8data = [6, self.snakeList8, self.appleList, self.snakeList + self.snakeList2 + self.snakeList3 +
-                    self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList7]
-        botdata = [bot2data, bot3data, bot4data, bot5data, bot6data, bot7data, bot8data]
+        for snake in self.snakes[1:]:
+            tmp = self.snakes[:]
+            tmp.remove(snake)
+            status = self.get_bot_action(snake, self.apple_list, tmp)
+            snake.append_head(Pos(snake.head.x + dx[status] * BLOCK_SIZE, snake.head.y + dy[status] * BLOCK_SIZE))
+            snake.maybe_remove_tail()
 
-        #print("multiprocessing start")
-        pool = multiprocessing.Pool(processes=1)
-        data = pool.map(self.snakeBotMulti, botdata)
+        # 자기 자신 게임이 끝났는지 체크
+        self._check_game_over()
 
-        #pool.close()
-        #pool.join()
-        #print("multiprocessing end")
-        #print(self.return_direction)
-        print(data)
-        self.return_direction = data
-        """
-        # bot2
-        status = self.snakeBot(self.snakeList2, self.appleList, self.snakeList + self.snakeList3 + self.snakeList4 +
-                               self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8)
+        # 뱀들 체크
+        snake_idx = 0
+        is_snake_dead = []
+        is_snake_crash_wall = []
+        for i in range(8):
+            is_snake_dead.append(False)
+            is_snake_crash_wall.append(False)
+        for snake in self.snakes[1:]:
+            snake_idx += 1
+            is_snake_dead[snake_idx] = False
+            is_snake_crash_wall[snake_idx] = False
+            if snake.is_self_crash():
+                is_snake_dead[snake_idx] = self.self_crash
+            if snake.is_crash_wall(self.display_width, self.display_height):
+                is_snake_dead[snake_idx] = True
+                is_snake_crash_wall[snake_idx] = True
+            for other_snake in self.snakes:
+                if other_snake == snake:
+                    continue
+                if other_snake.is_crash(snake.head):
+                    is_snake_dead[snake_idx] = True
 
-        #status = self.return_direction[0]
-        if status == 1:
-            self.snakeList2.append([self.snakeList2[len(self.snakeList2) - 1][0],
-                                    self.snakeList2[len(self.snakeList2) - 1][1] - self.block_size])
-        elif status == 2:
-            self.snakeList2.append([self.snakeList2[len(self.snakeList2) - 1][0],
-                                    self.snakeList2[len(self.snakeList2) - 1][1] + self.block_size])
-        elif status == 3:
-            self.snakeList2.append([self.snakeList2[len(self.snakeList2) - 1][0] - self.block_size,
-                                    self.snakeList2[len(self.snakeList2) - 1][1]])
-        elif status == 4:
-            self.snakeList2.append([self.snakeList2[len(self.snakeList2) - 1][0] + self.block_size,
-                                    self.snakeList2[len(self.snakeList2) - 1][1]])
-        if len(self.snakeList2) > self.snakeLength2:
-            del self.snakeList2[0]
+        for i in range(1, 8):
+            if is_snake_dead[i] and not is_snake_crash_wall[i]:
+                for pos in self.snakes[i].trunk:
+                    if random.randint(0, 3) >= 2:
+                        apple = Apple(pos.x, pos.y)
+                        if apple not in self.apple_list:
+                            self.apple_list.append(apple)
+            if is_snake_dead[i]:
+                self.snakes[i] = Snake()
 
-        # bot3
-
-        status = self.snakeBot(self.snakeList3, self.appleList,self.snakeList + self.snakeList2 + self.snakeList4 +
-                               self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8)
-
-        #status = self.return_direction[1]
-        if status == 1:
-            self.snakeList3.append([self.snakeList3[len(self.snakeList3) - 1][0],
-                                    self.snakeList3[len(self.snakeList3) - 1][1] - self.block_size])
-        elif status == 2:
-            self.snakeList3.append([self.snakeList3[len(self.snakeList3) - 1][0],
-                                    self.snakeList3[len(self.snakeList3) - 1][1] + self.block_size])
-        elif status == 3:
-            self.snakeList3.append([self.snakeList3[len(self.snakeList3) - 1][0] - self.block_size,
-                                    self.snakeList3[len(self.snakeList3) - 1][1]])
-        elif status == 4:
-            self.snakeList3.append([self.snakeList3[len(self.snakeList3) - 1][0] + self.block_size,
-                                    self.snakeList3[len(self.snakeList3) - 1][1]])
-        if len(self.snakeList3) > self.snakeLength3:
-            del self.snakeList3[0]
-
-        # bot4
-
-        status = self.snakeBot(self.snakeList4, self.appleList, self.snakeList + self.snakeList2 + self.snakeList3 +
-                               self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8)
-
-        #status = self.return_direction[2]
-        if status == 1:
-            self.snakeList4.append([self.snakeList4[len(self.snakeList4) - 1][0],
-                                    self.snakeList4[len(self.snakeList4) - 1][1] - self.block_size])
-        elif status == 2:
-            self.snakeList4.append([self.snakeList4[len(self.snakeList4) - 1][0],
-                                    self.snakeList4[len(self.snakeList4) - 1][1] + self.block_size])
-        elif status == 3:
-            self.snakeList4.append([self.snakeList4[len(self.snakeList4) - 1][0] - self.block_size,
-                                    self.snakeList4[len(self.snakeList4) - 1][1]])
-        elif status == 4:
-            self.snakeList4.append([self.snakeList4[len(self.snakeList4) - 1][0] + self.block_size,
-                                    self.snakeList4[len(self.snakeList4) - 1][1]])
-        if len(self.snakeList4) > self.snakeLength4:
-            del self.snakeList4[0]
-
-        # bot5
-
-        status = self.snakeBot(self.snakeList5, self.appleList, self.snakeList + self.snakeList2 + self.snakeList3 +
-                               self.snakeList4 + self.snakeList6 + self.snakeList7 + self.snakeList8)
-
-        #status = self.return_direction[3]
-        if status == 1:
-            self.snakeList5.append([self.snakeList5[len(self.snakeList5) - 1][0],
-                                    self.snakeList5[len(self.snakeList5) - 1][1] - self.block_size])
-        elif status == 2:
-            self.snakeList5.append([self.snakeList5[len(self.snakeList5) - 1][0],
-                                    self.snakeList5[len(self.snakeList5) - 1][1] + self.block_size])
-        elif status == 3:
-            self.snakeList5.append([self.snakeList5[len(self.snakeList5) - 1][0] - self.block_size,
-                                    self.snakeList5[len(self.snakeList5) - 1][1]])
-        elif status == 4:
-            self.snakeList5.append([self.snakeList5[len(self.snakeList5) - 1][0] + self.block_size,
-                                    self.snakeList5[len(self.snakeList5) - 1][1]])
-        if len(self.snakeList5) > self.snakeLength5:
-            del self.snakeList5[0]
-
-        # bot6
-
-        status = self.snakeBot(self.snakeList6, self.appleList, self.snakeList +self.snakeList2 + self.snakeList3 +
-                               self.snakeList4 + self.snakeList5 + self.snakeList7 + self.snakeList8)
-
-        #status = self.return_direction[4]
-        if status == 1:
-            self.snakeList6.append([self.snakeList6[len(self.snakeList6) - 1][0],
-                                    self.snakeList6[len(self.snakeList6) - 1][1] - self.block_size])
-        elif status == 2:
-            self.snakeList6.append([self.snakeList6[len(self.snakeList6) - 1][0],
-                                    self.snakeList6[len(self.snakeList6) - 1][1] + self.block_size])
-        elif status == 3:
-            self.snakeList6.append([self.snakeList6[len(self.snakeList6) - 1][0] - self.block_size,
-                                    self.snakeList6[len(self.snakeList6) - 1][1]])
-        elif status == 4:
-            self.snakeList6.append([self.snakeList6[len(self.snakeList6) - 1][0] + self.block_size,
-                                    self.snakeList6[len(self.snakeList6) - 1][1]])
-        if len(self.snakeList6) > self.snakeLength6:
-            del self.snakeList6[0]
-
-        # bot7
-
-        status = self.snakeBot(self.snakeList7, self.appleList, self.snakeList + self.snakeList2 + self.snakeList3 +
-                               self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList8)
-
-        #status = self.return_direction[5]
-        if status == 1:
-            self.snakeList7.append([self.snakeList7[len(self.snakeList7) - 1][0],
-                                    self.snakeList7[len(self.snakeList7) - 1][1] - self.block_size])
-        elif status == 2:
-            self.snakeList7.append([self.snakeList7[len(self.snakeList7) - 1][0],
-                                    self.snakeList7[len(self.snakeList7) - 1][1] + self.block_size])
-        elif status == 3:
-            self.snakeList7.append([self.snakeList7[len(self.snakeList7) - 1][0] - self.block_size,
-                                    self.snakeList7[len(self.snakeList7) - 1][1]])
-        elif status == 4:
-            self.snakeList7.append([self.snakeList7[len(self.snakeList7) - 1][0] + self.block_size,
-                                    self.snakeList7[len(self.snakeList7) - 1][1]])
-        if len(self.snakeList7) > self.snakeLength7:
-            del self.snakeList7[0]
-
-        # bot8
-
-        status = self.snakeBot(self.snakeList8, self.appleList, self.snakeList + self.snakeList2 + self.snakeList3 +
-                               self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList7)
-
-        #status = self.return_direction[6]
-        if status == 1:
-            self.snakeList8.append([self.snakeList8[len(self.snakeList8) - 1][0],
-                                    self.snakeList8[len(self.snakeList8) - 1][1] - self.block_size])
-        elif status == 2:
-            self.snakeList8.append([self.snakeList8[len(self.snakeList8) - 1][0],
-                                    self.snakeList8[len(self.snakeList8) - 1][1] + self.block_size])
-        elif status == 3:
-            self.snakeList8.append([self.snakeList8[len(self.snakeList8) - 1][0] - self.block_size,
-                                    self.snakeList8[len(self.snakeList8) - 1][1]])
-        elif status == 4:
-            self.snakeList8.append([self.snakeList8[len(self.snakeList8) - 1][0] + self.block_size,
-                                    self.snakeList8[len(self.snakeList8) - 1][1]])
-        if len(self.snakeList8) > self.snakeLength8:
-            del self.snakeList8[0]
-
-        # 플레이어의 머리와 타 플레이어의 몸통이 부딛힐 경우 게임 종료
-        if self.snakeList[len(self.snakeList) - 1] in self.snakeList[:-1] or self.snakeList[len(self.snakeList) - 1] in self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-            self.gameOver = True
-
-        # 컴퓨터끼리 부딛힐 경우, 밖으로 나갈 경우, 사과로 바뀌고 컴퓨터 초기화
-        appleAddList = []
-        removeSnake2 = removeSnake3 = removeSnake4 = removeSnake5 = removeSnake6 = removeSnake7 = removeSnake8 = False
-
-        if self.snakeList2[len(self.snakeList2) - 1] in self.snakeList2[:-1] or self.snakeList2[len(self.snakeList2) - 1] in self.snakeList + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-            for pos in self.snakeList2:
-                appleAddList.append(Apple(pos[0], pos[1]))
-            removeSnake2 = True
-        if self.snakeList3[len(self.snakeList3) - 1] in self.snakeList3[:-1] or self.snakeList3[len(self.snakeList3) - 1] in self.snakeList + self.snakeList2 + self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-            for pos in self.snakeList3:
-                appleAddList.append(Apple(pos[0], pos[1]))
-            removeSnake3 = True
-        if self.snakeList4[len(self.snakeList4) - 1] in self.snakeList4[:-1] or self.snakeList4[len(self.snakeList4) - 1] in self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-            for pos in self.snakeList4:
-                appleAddList.append(Apple(pos[0], pos[1]))
-            removeSnake4 = True
-        if self.snakeList5[len(self.snakeList5) - 1] in self.snakeList5[:-1] or self.snakeList5[len(self.snakeList5) - 1] in self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-            for pos in self.snakeList5:
-                appleAddList.append(Apple(pos[0], pos[1]))
-            removeSnake5 = True
-        if self.snakeList6[len(self.snakeList6) - 1] in self.snakeList6[:-1] or self.snakeList6[len(self.snakeList6) - 1] in self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList7 + self.snakeList8:
-            for pos in self.snakeList6:
-                appleAddList.append(Apple(pos[0], pos[1]))
-            removeSnake6 = True
-        if self.snakeList7[len(self.snakeList7) - 1] in self.snakeList7[:-1] or self.snakeList7[len(self.snakeList7) - 1] in self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList8:
-            for pos in self.snakeList7:
-                appleAddList.append(Apple(pos[0], pos[1]))
-            removeSnake7 = True
-        if self.snakeList8[len(self.snakeList8) - 1] in self.snakeList8[:-1] or self.snakeList8[len(self.snakeList8) - 1] in self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList7:
-            for pos in self.snakeList8:
-                appleAddList.append(Apple(pos[0], pos[1]))
-            removeSnake8 = True
-
-        if self.snakeList2[len(self.snakeList2) - 1][0] >= self.display_width or \
-                self.snakeList2[len(self.snakeList2) - 1][0] < 0 or \
-                self.snakeList2[len(self.snakeList2) - 1][1] >= self.display_height or \
-                self.snakeList2[len(self.snakeList2) - 1][1] < 0:
-            # appleAddList += self.snakeList2
-            removeSnake2 = True
-        if self.snakeList3[len(self.snakeList3) - 1][0] >= self.display_width or \
-                self.snakeList3[len(self.snakeList3) - 1][0] < 0 or \
-                self.snakeList3[len(self.snakeList3) - 1][1] >= self.display_height or \
-                self.snakeList3[len(self.snakeList3) - 1][1] < 0:
-            # appleAddList += self.snakeList3
-            removeSnake3 = True
-        if self.snakeList4[len(self.snakeList4) - 1][0] >= self.display_width or \
-                self.snakeList4[len(self.snakeList4) - 1][0] < 0 or \
-                self.snakeList4[len(self.snakeList4) - 1][1] >= self.display_height or \
-                self.snakeList4[len(self.snakeList4) - 1][1] < 0:
-            # appleAddList += self.snakeList4
-            removeSnake4 = True
-        if self.snakeList5[len(self.snakeList5) - 1][0] >= self.display_width or \
-                self.snakeList5[len(self.snakeList5) - 1][0] < 0 or \
-                self.snakeList5[len(self.snakeList5) - 1][1] >= self.display_height or \
-                self.snakeList5[len(self.snakeList5) - 1][1] < 0:
-            # appleAddList += self.snakeList5
-            removeSnake5 = True
-        if self.snakeList6[len(self.snakeList6) - 1][0] >= self.display_width or \
-                self.snakeList6[len(self.snakeList6) - 1][0] < 0 or \
-                self.snakeList6[len(self.snakeList6) - 1][1] >= self.display_height or \
-                self.snakeList6[len(self.snakeList6) - 1][1] < 0:
-            # appleAddList += self.snakeList6
-            removeSnake6 = True
-        if self.snakeList7[len(self.snakeList7) - 1][0] >= self.display_width or \
-                self.snakeList7[len(self.snakeList7) - 1][0] < 0 or \
-                self.snakeList7[len(self.snakeList7) - 1][1] >= self.display_height or \
-                self.snakeList7[len(self.snakeList7) - 1][1] < 0:
-            # appleAddList += self.snakeList7
-            removeSnake7 = True
-        if self.snakeList8[len(self.snakeList8) - 1][0] >= self.display_width or \
-                self.snakeList8[len(self.snakeList8) - 1][0] < 0 or \
-                self.snakeList8[len(self.snakeList8) - 1][1] >= self.display_height or \
-                self.snakeList8[len(self.snakeList8) - 1][1] < 0:
-            # appleAddList += self.snakeList8
-            removeSnake8 = True
-
-        if removeSnake2:
-            self.snakeList2.clear()
-            self.snakeLength2 = 3
-        if removeSnake3:
-            self.snakeList3.clear()
-            self.snakeLength3 = 3
-        if removeSnake4:
-            self.snakeList4.clear()
-            self.snakeLength4 = 3
-        if removeSnake5:
-            self.snakeList5.clear()
-            self.snakeLength5 = 3
-        if removeSnake6:
-            self.snakeList6.clear()
-            self.snakeLength6 = 3
-        if removeSnake7:
-            self.snakeList7.clear()
-            self.snakeLength7 = 3
-        if removeSnake8:
-            self.snakeList8.clear()
-            self.snakeLength8 = 3
-
-        for apple in appleAddList:
-            if apple not in self.appleList:
-                self.appleList.append(apple)
-
-        while True:
-            randPosition = [round(random.randrange(0, self.display_width - self.block_size) / 20.0) * 20.0,
-                            round(random.randrange(0, self.display_width - self.block_size) / 20.0) * 20.0]
-
-            # 컴퓨터 값 지정
-            if len(self.snakeList2) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList2.append(randPosition)
-                continue
-            if len(self.snakeList3) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList3.append(randPosition)
-                continue
-            if len(self.snakeList4) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList4.append(randPosition)
-                continue
-            if len(self.snakeList5) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList5.append(randPosition)
-                continue
-            if len(self.snakeList6) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList6.append(randPosition)
-                continue
-            if len(self.snakeList7) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList7.append(randPosition)
-                continue
-            if len(self.snakeList8) == 0 and randPosition not in \
-                    self.snakeList + self.snakeList2 + self.snakeList3 + self.snakeList4 + \
-                    self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
-                self.snakeList8.append(randPosition)
-                continue
-
-            # 종료조건
-            if len(self.snakeList) > 0 and len(self.snakeList2) > 0 and len(self.snakeList3) > 0 and \
-                    len(self.snakeList4) > 0 and len(self.snakeList5) > 0 and len(self.snakeList6) > 0 and \
-                    len(self.snakeList7) > 0 and len(self.snakeList8) > 0:
-                break
+        for snake in self.snakes:
+            while len(snake) == 0:
+                rand_pos = self.get_random_pos()
+                is_snake_exist = False
+                for other_snake in self.snakes:
+                    for pos in other_snake.trunk:
+                        if rand_pos == pos:
+                            is_snake_exist = True
+                if not is_snake_exist:
+                    snake.append_head(rand_pos)
 
         return reward
 
-    def _is_gameover(self):
+    def _check_game_over(self):
         # 플레이어의 머리와 타 플레이어의 몸통이 부딛힐 경우 게임 종료
-        if self.snakeList[len(self.snakeList)-1] in self.snakeList2 + self.snakeList3 + self.snakeList4 + self.snakeList5 + self.snakeList6 + self.snakeList7 + self.snakeList8:
+        if self.snakes[0].is_self_crash():
+            self.game_over = self.self_crash
+        for snake in self.snakes[1:]:
+            if snake.is_crash(self.snakes[0].head):
+                self.game_over = True
+        if self.lead_x >= self.display_width or self.lead_x < 0 or self.lead_y >= self.display_height or self.lead_y < 0:
+            self.game_over = True
+
+        if self.game_over:
             self.total_reward += self.current_reward
-            return True
-        elif self.lead_x >= self.display_width or self.lead_x < 0 or self.lead_y >= self.display_height or self.lead_y < 0:
-            self.total_reward += self.current_reward
-            return True
-        elif self.gameOver == True:
-            self.total_reward += self.current_reward
-            return True
-        else:
-            return False
+
+
 
     def step(self, action):
         # action: 0: 상, 1: 오, 2: 하, 3: 왼
         # 게임 진행
-        self._update_car(action + 1)
+        self._update_snake(action + 1)
 
-        # 장애물을 이동시킵니다. 장애물이 자동차에 충돌하지 않고 화면을 모두 지나가면 보상을 얻습니다.
-        escape_reward = self._update_block()
+        # 뱀과 사과를 업데이트 합니다.
+        escape_reward = self._update_board()
 
         # 움직임이 적을 경우에도 보상을 줘서 안정적으로 이동하는 것 처럼 보이게 만듭니다.
         #stable_reward = 1. / self.screen_height if action == 1 else 0
         stable_reward = 0
 
-        # 게임이 종료됐는지를 판단합니다. 자동차와 장애물이 충돌했는지를 파악합니다.
-        gameover = self._is_gameover()
-
-        if gameover:
-            # 장애물에 충돌한 경우 -8점을 보상으로 줍니다.
+        if self.game_over:
+            # 장애물에 충돌한 경우 -4점을 보상으로 줍니다.
             reward = -4
         else:
             reward = escape_reward + stable_reward
@@ -1062,5 +781,4 @@ class Game:
         if self.show_game:
             self._draw_screen()
 
-        return self._get_state(), reward, gameover
-
+        return self._get_state(), reward, self.game_over
