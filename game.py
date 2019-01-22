@@ -45,8 +45,9 @@ class Pos:
 
 
 class Snake:
-    def __init__(self, x, y):
+    def __init__(self, x=0, y=0):
         self.pos = Pos(x, y)
+        self.length = 3
 
 
 class Apple:
@@ -128,7 +129,6 @@ class Game:
         self.lead_x_change = 0
         self.lead_y_change = 0
 
-
         self.total_reward = 0.
         self.current_reward = 0.
         self.total_game = 0
@@ -139,7 +139,7 @@ class Game:
 
         # 보여주기 위한 설정
         if show_game:
-            self.fig, self.axis = self._prepare_display()
+            self._prepare_display()
 
     def snakeBot(self, _snakeList, _appleList, _enemyList):
         # 4방위 정의
@@ -321,22 +321,6 @@ class Game:
 
     def _prepare_display(self):
         # TODO: 수정 예정
-        """게임을 화면에 보여주기 위해 matplotlib 으로 출력할 화면을 설정합니다."""
-
-        fig, axis = plt.subplots(figsize=(self.screen_height, self.screen_width))
-        """
-        fig.set_size_inches(8, 8)
-        # 화면을 닫으면 프로그램을 종료합니다.
-        fig.canvas.mpl_connect('close_event', exit)
-        plt.axis((0, self.screen_width, 0, self.screen_height))
-        plt.tick_params(top='off', right='off',
-                        left='off', labelleft='off',
-                        bottom='off', labelbottom='off')
-        plt.draw()
-        # 게임을 진행하며 화면을 업데이트 할 수 있도록 interactive 모드로 설정합니다.
-        plt.ion()
-        plt.show()
-        """
 
         pygame.init()
         self.fps = 15
@@ -345,9 +329,6 @@ class Game:
 
         self.img = pygame.image.load("snakeHead.png")
         self.clock = pygame.time.Clock()
-
-
-        return fig, axis
 
     def _get_state(self):
         # TODO: 값 세부 수정 예정 (사과 0, 바닥 0.25, 자기자신 0.5, 다른 지렁이 0.75, 벽 1)
