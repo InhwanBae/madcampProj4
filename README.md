@@ -1,5 +1,5 @@
 
-# Slither-io DQN
+# Simple-Slither-io DQN
 
 DQN model based on https://github.com/golbin/TensorFlow-Tutorials/tree/master/12%20-%20DQN
 
