@@ -1,4 +1,4 @@
-# 게임 구현과 DQN 모델을 이용해 게임을 실행하고 학습을 진행합니다.
+# DQN model based on https://github.com/golbin/TensorFlow-Tutorials/tree/master/12%20-%20DQN
 import tensorflow as tf
 import numpy as np
 import random
@@ -8,10 +8,10 @@ from game import Game
 from model import DQN
 
 
-tf.app.flags.DEFINE_boolean("train", False, "학습모드. 게임을 화면에 보여주지 않습니다.")
-tf.app.flags.DEFINE_boolean("fancy", False, "예쁜 모드.")
-tf.app.flags.DEFINE_boolean("f", False, "예쁜 모드.")
-tf.app.flags.DEFINE_boolean("self_crash", False, "나한테 박으면 죽음.")
+tf.app.flags.DEFINE_boolean("train", False, "Learning mode. Do not show the game on the screen. ")
+tf.app.flags.DEFINE_boolean("fancy", False, "Fancy Graphics mode.")
+tf.app.flags.DEFINE_boolean("f", False, "Fancy Graphics mode.")
+tf.app.flags.DEFINE_boolean("self_crash", False, "Death when self-collision")
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -24,9 +24,6 @@ TRAIN_INTERVAL = 1
 # 학습 데이터를 어느정도 쌓은 후, 일정 시간 이후에 학습을 시작하도록 합니다.
 OBSERVE = 100
 
-# action: 0: 좌, 1: 유지, 2: 우
-#NUM_ACTION = 3
-
 # action: 0: 상, 1: 오, 2: 하, 3: 왼
 NUM_ACTION = 4
 SCREEN_WIDTH = 40
@@ -37,7 +34,7 @@ MODEL_HEIGHT = 7
 
 
 def train():
-    print('뇌세포 깨우는 중..')
+    print('Training..')
     sess = tf.Session()
 
     game = Game(SCREEN_WIDTH, SCREEN_HEIGHT, MODEL_WIDTH, MODEL_HEIGHT, show_game=False)
@@ -107,7 +104,7 @@ def train():
 
             time_step += 1
 
-        print('게임횟수: %d 점수: %d' % (episode + 1, total_reward))
+        print('Number of games: %d score: %d' % (episode + 1, total_reward))
 
         total_reward_list.append(total_reward)
 
@@ -121,7 +118,7 @@ def train():
 
 
 def replay():
-    print('뇌세포 깨우는 중..')
+    print('Replaying..')
     sess = tf.Session()
 
     game = Game(SCREEN_WIDTH, SCREEN_HEIGHT, MODEL_WIDTH, MODEL_HEIGHT, show_game=True,
@@ -151,10 +148,9 @@ def replay():
 
             brain.remember(state, action, reward, terminal)
 
-            # 게임 진행을 인간이 인지할 수 있는 속도로^^; 보여줍니다.
             time.sleep(0.01)
 
-        print(' 게임횟수: %d 점수: %d' % (episode + 1, total_reward))
+        print('Number of games: %d score: %d' % (episode + 1, total_reward))
 
 
 def main(_):

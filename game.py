@@ -1,4 +1,3 @@
-# 장애물 회피 게임 즉, 자율주행차:-D 게임을 구현합니다.
 import numpy as np
 import random
 import pygame
@@ -12,7 +11,7 @@ BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 
-# 4방위 정의
+# Define cardinal points
 #    1
 # 3  0  4
 #    2
@@ -161,10 +160,10 @@ class Game:
 
         self.game_over = False
 
-        # 사과 정의
+        # Apple definition
         self.apple_list = []
 
-        # 사용자 지렁이 정의
+        # User worm definition
         self.lead_x = 0
         self.lead_y = 0
         self.lead_x_change = 0
@@ -175,7 +174,7 @@ class Game:
         self.total_game = 0
         self.show_game = show_game
 
-        # 보여주기 위한 설정
+        # Settings for showing
         if show_game:
             self._prepare_display()
 
@@ -183,9 +182,9 @@ class Game:
         return Pos(round(random.randrange(0, self.display_width - BLOCK_SIZE) / BLOCK_SIZE) * BLOCK_SIZE,
         round(random.randrange(0, self.display_height - BLOCK_SIZE) / BLOCK_SIZE) * BLOCK_SIZE)
 
-    # 봇들의 움직임 제어
+    # Controlling movement of bots
     def get_bot_action(self, snake, _apple_list, _enemyList):
-        # 4방위 정의
+        # Define cardinal points
         #    1
         # 3  0  4
         #    2
@@ -222,12 +221,13 @@ class Game:
                 if xhead - BLOCK_SIZE * 5 <= pos.x <= xhead + BLOCK_SIZE * 5 and yhead - BLOCK_SIZE * 5 <= pos.y <= yhead + BLOCK_SIZE * 5:
                     enemyList.append(pos)
 
-        # 숫자 같지 않도록 0~1의 난수로 방향 랜덤 가중치
+        # Random weights with a random number between 0 and 1
         up = random.random()
         down = random.random()
         left = random.random()
         right = random.random()
 
+        # AI path calculation using weights
         for i in xapos:
             for j in yapos:
                 for apple in apple_list:
@@ -362,37 +362,38 @@ class Game:
         self.clock = pygame.time.Clock()
 
     def _get_state(self):
-        # TODO: 값 세부 수정 예정 (사과 0, 바닥 0.25, 자기자신 0.5, 다른 지렁이 0.75, 벽 1)
+        # TODO: Modify values (apple 0, bg 0.25, me 0.5, others 0.75, wall 1)
         state = np.zeros((self.screen_width, self.screen_height))
+
+        # bg
         state.fill(0.25)
 
-        # 자기 자신 1로 표현
+        # me
         for points in self.snakes[0].trunk:
-            # 맵 밖으로 나가서 죽은 뱀들 처리
+            # Exception handling
             if 0 <= round(points.x / BLOCK_SIZE) < self.screen_height and \
                     0 <= round(points.y / BLOCK_SIZE) < self.screen_width:
                 state[round(points.x / BLOCK_SIZE)][round(points.y / BLOCK_SIZE)] = 0.5
 
-        # 다른 지렁이 0.25 로 표현
+        # others
         for snake in self.snakes[1:]:
             for points in snake.trunk:
-                # 맵 밖으로 나가서 죽은 뱀들 처리
+                # Exception handling
                 if 0 <= round(points.x / BLOCK_SIZE) < self.screen_height and \
                         0 <= round(points.y / BLOCK_SIZE) < self.screen_width:
                     state[round(points.x / BLOCK_SIZE)][round(points.y / BLOCK_SIZE)] = 0.75
 
-        # 사과 0.75로 표현
+        # apples
         for apple in self.apple_list:
             points = apple.pos
-            # 맵 밖 사과 처리
+            # Exception handling
             if 0 <= round(points.x / BLOCK_SIZE) < self.screen_height and \
                     0 <= round(points.y / BLOCK_SIZE) < self.screen_width:
                 state[round(points.x / BLOCK_SIZE)][round(points.y / BLOCK_SIZE)] = 0
 
-        # 벽 0.5로 표현
+        # wall
 
-
-        # 머리 주변의 값 보내주기
+        # Send values around the snakehead
         current_state = np.zeros((self.model_width, self.model_height))
         current_state.fill(1)
 
@@ -413,14 +414,14 @@ class Game:
 
         return current_state
 
-    # 스네이크 표현해 주는 부분
+    # Draw snake on the scene
     def draw_snake(self, snake, slot):
         if self.fancy_graphic:
-            # 예쁘게 그려주기
+            # Show fancy graphic
             body = get_image('snakeBody'+str(slot))
             shader = get_image("snakeShader40")
 
-            # 1/2 지점 생성
+            # Generate 1/2 points
             body_list = []
             for i in range(len(snake)):
                 if i < len(snake) - 1:
@@ -438,6 +439,7 @@ class Game:
                                           (body_list[i].y + body_list[i + 1].y) / 2))
             snake_body.append(snake.head)
 
+            # Generate 1/4 points
             body_list2 = []
             for i in range(len(snake_body)):
                 if i < len(snake_body) - 1:
@@ -453,6 +455,7 @@ class Game:
                                            (body_list2[i].y + body_list2[i+1].y) / 2))
             snake_body2.append(snake_body[len(snake_body) - 1])
 
+            # Draw snakes
             for i in range(len(snake_body2)):
                 if not i % 2 == 1:
                     self.gameDisplay.blit(shader, (snake_body2[i].x - 10, snake_body2[i].y - 8))
@@ -461,36 +464,28 @@ class Game:
                 self.gameDisplay.blit(body, (pos.x - 2, pos.y - 2))
 
             if len(snake) > 1:
-                if snake_body2[len(snake_body2) - 1].x == snake_body2[len(snake_body2) - 3].x and \
-                        snake_body2[len(snake_body2) - 1].y < snake_body2[len(snake_body2) - 3].y:
+                if snake_body2[-1].x == snake_body2[-3].x and snake_body2[-1].y < snake_body2[-3].y:
                     self.gameDisplay.blit(eyes[0], (snake.head.x - 2, snake.head.y - 2))
 
-                if snake_body2[len(snake_body2) - 1].x > snake_body2[len(snake_body2) - 3].x and \
-                        snake_body2[len(snake_body2) - 1].y < snake_body2[len(snake_body2) - 3].y:
+                if snake_body2[-1].x > snake_body2[-3].x and snake_body2[-1].y < snake_body2[-3].y:
                     self.gameDisplay.blit(eyes[1], (snake.head.x - 2, snake.head.y - 2))
 
-                if snake_body2[len(snake_body2) - 1].x > snake_body2[len(snake_body2) - 3].x and \
-                        snake_body2[len(snake_body2) - 1].y == snake_body2[len(snake_body2) - 3].y:
+                if snake_body2[-1].x > snake_body2[-3].x and snake_body2[-1].y == snake_body2[-3].y:
                     self.gameDisplay.blit(eyes[2], (snake.head.x - 2, snake.head.y - 2))
 
-                if snake_body2[len(snake_body2) - 1].x > snake_body2[len(snake_body2) - 3].x and \
-                        snake_body2[len(snake_body2) - 1].y > snake_body2[len(snake_body2) - 3].y:
+                if snake_body2[-1].x > snake_body2[-3].x and snake_body2[-1].y > snake_body2[-3].y:
                     self.gameDisplay.blit(eyes[3], (snake.head.x - 2, snake.head.y - 2))
 
-                if snake_body2[len(snake_body2) - 1].x == snake_body2[len(snake_body2) - 3].x and \
-                        snake_body2[len(snake_body2) - 1].y > snake_body2[len(snake_body2) - 3].y:
+                if snake_body2[-1].x == snake_body2[-3].x and snake_body2[-1].y > snake_body2[-3].y:
                     self.gameDisplay.blit(eyes[4], (snake.head.x - 2, snake.head.y - 2))
 
-                if snake_body2[len(snake_body2) - 1].x < snake_body2[len(snake_body2) - 3].x and \
-                        snake_body2[len(snake_body2) - 1].y > snake_body2[len(snake_body2) - 3].y:
+                if snake_body2[-1].x < snake_body2[-3].x and snake_body2[-1].y > snake_body2[-3].y:
                     self.gameDisplay.blit(eyes[5], (snake.head.x - 2, snake.head.y - 2))
 
-                if snake_body2[len(snake_body2) - 1].x < snake_body2[len(snake_body2) - 3].x and \
-                        snake_body2[len(snake_body2) - 1].y == snake_body2[len(snake_body2) - 3].y:
+                if snake_body2[-1].x < snake_body2[-3].x and snake_body2[-1].y == snake_body2[-3].y:
                     self.gameDisplay.blit(eyes[6], (snake.head.x - 2, snake.head.y - 2))
 
-                if snake_body2[len(snake_body2) - 1].x < snake_body2[len(snake_body2) - 3].x and \
-                        snake_body2[len(snake_body2) - 1].y < snake_body2[len(snake_body2) - 3].y:
+                if snake_body2[-1].x < snake_body2[-3].x and snake_body2[-1].y < snake_body2[-3].y:
                     self.gameDisplay.blit(eyes[7], (snake.head.x - 2, snake.head.y - 2))
             else:
                 self.gameDisplay.blit(eyes[0], (snake.head.x - 2, snake.head.y - 2))
@@ -517,18 +512,16 @@ class Game:
         def getKey(item):
             return item[0]
 
-
-
         print(score_list)
         i = 1
         for score, name in reversed(sorted(score_list, key=getKey)):
             self._draw_text(str(i) + ". " + str(name) + ": " + str(score),
                             (self.screen_width / 2,self.screen_height / 2 + i * BLOCK_SIZE))
-            i+=1
+            i += 1
 
     def _draw_screen(self):
 
-        # 게임 화면에 구현
+        # Implemented on the game screen
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -554,18 +547,18 @@ class Game:
 
         self._draw_score()
 
-        # 화면 업데이트
+        # Scene update
         pygame.display.update()
 
-        # 다음 틱까지 대기
+        # Wait till next tick
         self.clock.tick(self.fps)
 
 
     def reset(self):
-        # 게임 판 초기화
+        # Initialize the game board
         self.game_over = False
 
-        # 지렁이 정의
+        # Define snakes
         self.snakes = []
         for i in range(8):
             self.snakes.append(Snake())
@@ -574,7 +567,7 @@ class Game:
         self.lead_y_change = 0
 
         self.apple_list = []
-        # 지렁이들의 위치 생성
+        # Create the location of snakes
         snake_idx = 0
         for snake in self.snakes:
             while len(snake) == 0:
@@ -592,16 +585,16 @@ class Game:
                 snake_idx += 1
 
 
-        # 사과 생성
+        # Generate apple
         while len(self.apple_list) <= APPLE_COUNT:
             gen_apple = Apple(pos=self.get_random_pos())
 
-            # 같은 위치에 사과가 생기지 않도록 함
+            # Avoid apples in the same location
             is_apple_exist = False
             for apple in self.apple_list:
                 if gen_apple == apple:
                     is_apple_exist = True
-            # 뱀 위에 사과가 생기지 않도록 함
+            # Avoiding apples on snakes
             for snake in self.snakes:
                 for pos in snake.trunk:
                     if gen_apple.pos == pos:
@@ -616,13 +609,13 @@ class Game:
         return self._get_state()
 
     def _update_snake(self, move):
-        # 4방위 정의
+        # Define cardinal points
         #    1
         # 4  0  2
         #    3
         print(move, end="")
 
-        # 사용자 입력 처리문
+        # User input processing statement
         if move == 4:
             self.lead_x_change = -BLOCK_SIZE
             self.lead_y_change = 0
@@ -636,21 +629,21 @@ class Game:
             self.lead_y_change = BLOCK_SIZE
             self.lead_x_change = 0
 
-        # 머리의 위치 추가
+        # Add head position
         self.lead_x += self.lead_x_change
         self.lead_y += self.lead_y_change
 
-        # 머리 이동,리스트 추가 및 맨 마지막 꼬리 제거
+        # Move head, add list and remove last tail
         # print(self.lead_x, self.lead_y)
         self.snakes[0].append_head(Pos(self.lead_x, self.lead_y))
         self.snakes[0].maybe_remove_tail()
 
-    # 봇과 사과를 업데이트 한다.
+    # Update bots and apples
     def _update_board(self):
-        # TODO: 수정 예정
+        # TODO: To be fixed
         reward = 0
         remove_apple = []
-        # 먹은 사과 제거
+        # Remove eaten apples
         for apple in self.apple_list:
             i = 0
             for snake in self.snakes:
@@ -669,18 +662,18 @@ class Game:
         for snake in self.snakes:
             total_snake_length += len(snake)
 
-        # 사과 생성
+        # Generate apple
         while len(self.apple_list) <= APPLE_COUNT and len(self.apple_list) + total_snake_length \
                 < self.screen_width * self.screen_height * 0.9:
             gen_apple = Apple(pos=self.get_random_pos())
 
-            # 같은 위치에 사과가 생기지 않도록 함
+            # Avoid apples in the same location
             is_apple_exist = False
             for apple in self.apple_list:
                 if gen_apple == apple:
                     is_apple_exist = True
 
-            # 뱀 위에 사과가 생기지 않도록 함
+            # Avoiding apples on snakes
             for snake in self.snakes:
                 for pos in snake.trunk:
                     if gen_apple.pos == pos:
@@ -696,10 +689,10 @@ class Game:
             snake.append_head(Pos(snake.head.x + dx[status] * BLOCK_SIZE, snake.head.y + dy[status] * BLOCK_SIZE))
             snake.maybe_remove_tail()
 
-        # 자기 자신 게임이 끝났는지 체크
+        # Check the game over
         self._check_game_over()
 
-        # 뱀들 체크
+        # Check snakes
         snake_idx = 0
         is_snake_dead = []
         is_snake_crash_wall = []
@@ -745,7 +738,7 @@ class Game:
         return reward
 
     def _check_game_over(self):
-        # 플레이어의 머리와 타 플레이어의 몸통이 부딛힐 경우 게임 종료
+        # When the head of the player and the body of the other player are hit, the game ends
         if self.snakes[0].is_self_crash():
             self.game_over = self.self_crash
         for snake in self.snakes[1:]:
@@ -764,15 +757,11 @@ class Game:
         # 게임 진행
         self._update_snake(action + 1)
 
-        # 뱀과 사과를 업데이트 합니다.
         escape_reward = self._update_board()
 
-        # 움직임이 적을 경우에도 보상을 줘서 안정적으로 이동하는 것 처럼 보이게 만듭니다.
-        #stable_reward = 1. / self.screen_height if action == 1 else 0
         stable_reward = 0
 
         if self.game_over:
-            # 장애물에 충돌한 경우 -4점을 보상으로 줍니다.
             reward = -4
         else:
             reward = escape_reward + stable_reward
